@@ -24,7 +24,7 @@ export class DiagramRepository {
 
   async getById(id: string): Promise<Diagram | null> {
     const res = await this.pool.query('SELECT id, name, type, svg_data, created_at, updated_at FROM diagrams WHERE id = $1', [id]);
-    if (res.rowCount === 0) return null;
+    if (res.rows.length === 0) return null;
     return mapRow(res.rows[0]);
   }
 
@@ -52,13 +52,12 @@ export class DiagramRepository {
     const query = `UPDATE diagrams SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${idx} RETURNING id, name, type, svg_data, created_at, updated_at`;
     values.push(id);
     const res = await this.pool.query(query, values);
-    if (res.rowCount === 0) return null;
+    if (res.rows.length === 0) return null;
     return mapRow(res.rows[0]);
   }
 
   async delete(id: string): Promise<boolean> {
-    const res = await this.pool.query('DELETE FROM diagrams WHERE id = $1', [id]);
-    return res.rowCount > 0;
+    const res = await this.pool.query('DELETE FROM diagrams WHERE id = $1 RETURNING id', [id]);
+    return res.rows.length > 0;
   }
 }
-

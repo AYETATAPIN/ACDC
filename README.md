@@ -1,6 +1,6 @@
 # ACDC Backend (MVP)
 
-Backend на Node.js/TypeScript для веб-редактора диаграмм. Хранит диаграммы в PostgreSQL (как текст SVG), использует Redis только для истории изменений (undo/redo) по id. Запуск через Docker Compose.
+Backend на Node.js/TypeScript для веб-редактора диаграмм. Хранит диаграммы в PostgreSQL (как текст SVG). Запуск через Docker Compose.
 
 ## Запуск
 
@@ -18,15 +18,13 @@ API будет доступно на `http://localhost:3000`.
 
 - Node.js 20, TypeScript, Express
 - PostgreSQL (таблица `diagrams`)
-- Redis (история изменений undo/redo)
 - Docker, docker-compose
 
 ## Переменные окружения
 
 - `PORT` — порт API (по умолчанию 3000)
 - Параметры БД: `DATABASE_URL` или `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
-- Параметры Redis: `REDIS_URL` или `REDIS_HOST`, `REDIS_PORT`
-- Лимит истории: `HISTORY_LIMIT` (по умолчанию 50)
+ - Для docker-compose Postgres: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` (используются сервисом БД)
 
 См. пример: `.env.example`.
 
@@ -45,10 +43,8 @@ API будет доступно на `http://localhost:3000`.
 - GET `/api/v1/diagrams` — список диаграмм
 - GET `/api/v1/diagrams/:id` — получить диаграмму
 - POST `/api/v1/diagrams` — создать
-- PUT `/api/v1/diagrams/:id` — обновить (инвалидирует кеш)
-- DELETE `/api/v1/diagrams/:id` — удалить (инвалидирует кеш)
- - POST `/api/v1/diagrams/:id/undo` — откатить одно изменение; возвращает обновлённую диаграмму
- - POST `/api/v1/diagrams/:id/redo` — вернуть откат (повторить изменение); возвращает обновлённую диаграмму
+- PUT `/api/v1/diagrams/:id` — обновить
+- DELETE `/api/v1/diagrams/:id` — удалить
 
 ### Примеры
 
@@ -76,13 +72,6 @@ curl -X PUT http://localhost:3000/api/v1/diagrams/{id} \
 
 curl -X DELETE http://localhost:3000/api/v1/diagrams/{id}
 
-Undo (назад):
-
-curl -X POST http://localhost:3000/api/v1/diagrams/{id}/undo
-
-Redo (вперёд):
-
-curl -X POST http://localhost:3000/api/v1/diagrams/{id}/redo
 
 ## Docker
 
@@ -94,4 +83,3 @@ curl -X POST http://localhost:3000/api/v1/diagrams/{id}/redo
 
 - Все ответы — JSON. Для удаления — `{ "success": true }`.
 - `id` — UUID, генерируется на backend при создании.
-- Redis хранит только историю изменений для undo/redo (стек до `HISTORY_LIMIT`).

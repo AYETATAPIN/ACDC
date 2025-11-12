@@ -43,18 +43,4 @@ export class DiagramController {
     if (!ok) return res.status(404).json({ error: 'Diagram not found' });
     return res.status(200).json({ success: true });
   };
-
-  undo = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const d = await this.service.undo(id);
-    if (!d) return res.status(409).json({ error: 'Nothing to undo or diagram not found' });
-    return res.json(d);
-  };
-
-  redo = async (req: Request, res: Response) => {
-    const { id } = req.params;
-    const d = await this.service.redo(id);
-    if (!d) return res.status(409).json({ error: 'Nothing to redo or diagram not found' });
-    return res.json(d);
-  };
 }

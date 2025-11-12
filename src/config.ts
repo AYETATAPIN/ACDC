@@ -21,12 +21,4 @@ export const config = {
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined,
   },
 
-  redis: {
-    url: process.env.REDIS_URL,
-    host: process.env.REDIS_HOST || 'cache',
-    port: parseIntEnv(process.env.REDIS_PORT, 6379),
-  },
-  history: {
-    limit: parseIntEnv(process.env.HISTORY_LIMIT, 50),
-  },
 } as const;

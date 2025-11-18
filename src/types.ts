@@ -5,8 +5,8 @@ export interface Diagram {
   name: string;
   type: DiagramType;
   svg_data: string;
-  created_at: string; // ISO string
-  updated_at: string; // ISO string
+  created_at: string;
+  updated_at: string;
 }
 
 export interface DiagramCreateInput {
@@ -21,3 +21,54 @@ export interface DiagramUpdateInput {
   svg_data?: string;
 }
 
+// Новые типы для блоков и связей
+export interface DiagramBlock {
+  id: string;
+  diagram_id: string;
+  type: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  properties: Record<string, any>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DiagramConnection {
+  id: string;
+  diagram_id: string;
+  from_block_id: string;
+  to_block_id: string;
+  type: string;
+  points: Array<{x: number, y: number}>;
+  label?: string;
+  created_at: string;
+}
+
+export interface DiagramBlockCreateInput {
+  diagram_id: string;
+  type: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  properties?: Record<string, any>;
+}
+
+export interface DiagramBlockUpdateInput {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  properties?: Record<string, any>;
+}
+
+export interface DiagramConnectionCreateInput {
+  diagram_id: string;
+  from_block_id: string;
+  to_block_id: string;
+  type: string;
+  points?: Array<{x: number, y: number}>;
+  label?: string;
+}

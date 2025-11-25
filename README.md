@@ -91,6 +91,11 @@ npm run dev
 - `PUT /api/v1/diagrams/:id` - обновить диаграмму
 - `DELETE /api/v1/diagrams/:id` - удалить диаграмму
 
+### История диаграмм (undo/redo)
+- `GET /api/v1/diagrams/:diagramId/history` - список доступных версий, текущая позиция
+- `POST /api/v1/diagrams/:diagramId/undo` - откатить диаграмму на предыдущий снапшот
+- `POST /api/v1/diagrams/:diagramId/redo` - вернуть диаграмму на следующую версию (если undo уже делался)
+
 ### Блоки диаграмм
 - `GET /api/v1/diagram-blocks/diagram/:diagramId` - блоки диаграммы
 - `GET /api/v1/diagram-blocks/:id` - получить блок
@@ -131,6 +136,7 @@ npm run dev
 npm run build          # Сборка TypeScript
 npm run dev           # Запуск в режиме разработки
 npm run typecheck     # Проверка типов
+npm test              # Интеграционные тесты undo/redo (нужен запущенный PostgreSQL)
 
 # Frontend
 cd frontend
@@ -187,9 +193,19 @@ docker-compose build --no-cache
 - `diagrams` - диаграммы (id, name, type, svg_data)
 - `diagram_blocks` - блоки диаграмм
 - `diagram_connections` - связи между блоками
+- `diagram_history` - снапшоты диаграмм для undo/redo
 
 ### Инициализация
 База данных автоматически инициализируется через `sql/init.sql` при первом запуске.
+
+## Ручные проверки в браузере (после `docker-compose up`)
+- API базовый URL: `http://localhost:3000/api/v1`
+- Диаграммы: `GET /diagrams`, `GET /diagrams/{id}`, `POST /diagrams`, `PUT /diagrams/{id}`, `DELETE /diagrams/{id}`
+- История: `GET /diagrams/{id}/history`, `POST /diagrams/{id}/undo`, `POST /diagrams/{id}/redo`
+- Блоки: `GET /diagram-blocks/diagram/{diagramId}`, `POST /diagram-blocks`, `PUT /diagram-blocks/{id}`, `DELETE /diagram-blocks/{id}`
+- Связи: `GET /diagram-connections/diagram/{diagramId}`, `POST /diagram-connections`, `DELETE /diagram-connections/{id}`
+- Фронтенд (если dev-сервер): `http://localhost:5173`
+- Собранный SPA из `public` (serve бекендом): `http://localhost:3000`
 
 ## Примеры использования
 

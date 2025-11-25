@@ -5,6 +5,7 @@ export interface Diagram {
     name: string;
     type: DiagramType;
     svg_data: string;
+    // current_version хранится в таблице, но не обязательно возвращается клиенту
     created_at: string;
     updated_at: string;
 }
@@ -71,4 +72,18 @@ export interface DiagramConnectionCreateInput {
     type: string;
     points?: Array<{ x: number, y: number }>;
     label?: string;
+}
+
+export interface DiagramSnapshot {
+    diagram: Diagram;
+    blocks: DiagramBlock[];
+    connections: DiagramConnection[];
+}
+
+export interface DiagramHistoryEntry {
+    id: string;
+    diagram_id: string;
+    version: number;
+    state: DiagramSnapshot;
+    created_at: string;
 }

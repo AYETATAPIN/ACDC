@@ -1,6 +1,6 @@
 // src/app.ts
 import express from 'express';
-import cors from 'cors'; // ДОБАВЬТЕ ЭТОТ ИМПОРТ
+import cors from 'cors'; 
 import {getPool, initDb} from './db.js';
 import {DiagramRepository} from './repositories/diagramRepository.js';
 import {DiagramBlockRepository} from './repositories/diagramBlockRepository.js';

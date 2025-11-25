@@ -2,14 +2,14 @@ import { Pool } from 'pg';
 import { DiagramConnection, DiagramConnectionCreateInput, DiagramConnectionUpdateInput } from '../types.js';
 
 const mapConnectionRow = (row: any): DiagramConnection => ({
-  id: row.id,
-  diagram_id: row.diagram_id,
-  from_block_id: row.from_block_id,
-  to_block_id: row.to_block_id,
-  type: row.type,
-  points: row.points,
-  label: row.label,
-  created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    id: row.id,
+    diagram_id: row.diagram_id,
+    from_block_id: row.from_block_id,
+    to_block_id: row.to_block_id,
+    type: row.type,
+    points: row.points,
+    label: row.label,
+    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
 });
 
 export class DiagramConnectionRepository {

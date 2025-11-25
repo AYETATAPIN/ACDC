@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS diagrams (
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('class','use_case','free_mode')),
   svg_data TEXT NOT NULL,
+  current_version INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -40,3 +41,17 @@ CREATE TABLE IF NOT EXISTS diagram_connections (
 CREATE INDEX IF NOT EXISTS idx_diagrams_created_at ON diagrams (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_diagram_blocks_diagram_id ON diagram_blocks (diagram_id);
 CREATE INDEX IF NOT EXISTS idx_diagram_connections_diagram_id ON diagram_connections (diagram_id);
+
+-- История изменений диаграммы для undo/redo
+ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS current_version INTEGER NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS diagram_history (
+  id UUID PRIMARY KEY,
+  diagram_id UUID NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
+  version INTEGER NOT NULL,
+  state JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(diagram_id, version)
+);
+
+CREATE INDEX IF NOT EXISTS idx_diagram_history_diagram_version ON diagram_history (diagram_id, version);

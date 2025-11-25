@@ -11,12 +11,10 @@ services:
       - db_data:/var/lib/postgresql/data
       - ./sql/init.sql:/docker-entrypoint-initdb.d/00-init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d acdc"]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d acdc" ]
       interval: 5s
       timeout: 5s
       retries: 10
-
-  
 
   api:
     build: .
@@ -32,6 +30,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - ./public:/app/public
 
 volumes:
   db_data:

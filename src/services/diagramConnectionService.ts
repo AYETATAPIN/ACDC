@@ -4,7 +4,8 @@ import { DiagramConnection, DiagramConnectionCreateInput, DiagramConnectionUpdat
 import { DiagramConnectionRepository } from '../repositories/diagramConnectionRepository.js';
 
 export class DiagramConnectionService {
-  private repo: DiagramConnectionRepository;
+    private repo: DiagramConnectionRepository;
+    private history: DiagramHistoryService;
 
   constructor(repo: DiagramConnectionRepository) { 
     this.repo = repo;
@@ -17,11 +18,12 @@ export class DiagramConnectionService {
     return this.repo.getByDiagramId(diagramId);
   }
 
-  async create(input: DiagramConnectionCreateInput): Promise<{ id: string }> {
-    const id = uuidv4();
-    await this.repo.create(id, input);
-    return { id };
-  }
+    async create(input: DiagramConnectionCreateInput): Promise<{ id: string }> {
+        const id = uuidv4();
+        await this.repo.create(id, input);
+        await this.history.recordSnapshot(input.diagram_id);
+        return {id};
+    }
 
   async delete(id: string): Promise<boolean> {
     const ok = await this.repo.delete(id);

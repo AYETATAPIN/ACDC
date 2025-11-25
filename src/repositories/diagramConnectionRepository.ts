@@ -27,6 +27,12 @@ export class DiagramConnectionRepository {
         return res.rows.map(mapConnectionRow);
     }
 
+    async getById(id: string): Promise<DiagramConnection | null> {
+        const res = await this.pool.query('SELECT * FROM diagram_connections WHERE id = $1', [id]);
+        if (res.rows.length === 0) return null;
+        return mapConnectionRow(res.rows[0]);
+    }
+
     async create(id: string, input: DiagramConnectionCreateInput): Promise<DiagramConnection> {
         const res = await this.pool.query(
             `INSERT INTO diagram_connections (id, diagram_id, from_block_id, to_block_id, type, points, label)

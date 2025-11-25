@@ -66,24 +66,25 @@ export interface DiagramBlockUpdateInput {
 }
 
 export interface DiagramConnectionCreateInput {
-    diagram_id: string;
-    from_block_id: string;
-    to_block_id: string;
-    type: string;
-    points?: Array<{ x: number, y: number }>;
-    label?: string;
+  diagram_id: string;
+  from_block_id: string;
+  to_block_id: string;
+  type: string;
+  points?: Array<{x: number, y: number}>;
+  label?: string;
 }
 
-export interface DiagramSnapshot {
-    diagram: Diagram;
-    blocks: DiagramBlock[];
-    connections: DiagramConnection[];
+export interface DiagramBlockUpdateInput {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  properties?: Record<string, any>;
 }
-
-export interface DiagramHistoryEntry {
-    id: string;
-    diagram_id: string;
-    version: number;
-    state: DiagramSnapshot;
-    created_at: string;
+export interface DiagramConnectionUpdateInput {
+  label?: string;
+  points?: Array<{x: number, y: number}>;
+}
+export interface BendPointCreateInput {
+  position: 'middle';
 }

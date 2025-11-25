@@ -1,4 +1,13 @@
-import { DiagramCreateInput, DiagramType, DiagramUpdateInput } from '../types.js';
+import { 
+  DiagramCreateInput, 
+  DiagramType, 
+  DiagramUpdateInput,
+  DiagramBlockCreateInput,
+  DiagramBlockUpdateInput,        
+  DiagramConnectionCreateInput,     
+  DiagramConnectionUpdateInput,  
+  BendPointCreateInput
+} from '../types.js';
 
 const TYPES: DiagramType[] = ['class', 'use_case', 'free_mode'];
 
@@ -68,6 +77,7 @@ export const validateBlockCreate = (body: any): { ok: true; data: DiagramBlockCr
   return { ok: true, data };
 };
 
+// В src/utils/validators.ts обновим validateBlockUpdate
 export const validateBlockUpdate = (body: any): { ok: true; data: DiagramBlockUpdateInput } | { ok: false; error: string } => {
   if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
   const { x, y, width, height, properties } = body;
@@ -84,17 +94,20 @@ export const validateBlockUpdate = (body: any): { ok: true; data: DiagramBlockUp
   }
   
   if (width !== undefined) {
-    if (typeof width !== 'number') return { ok: false, error: 'width must be a number' };
+    if (typeof width !== 'number' || width <= 0) 
+      return { ok: false, error: 'width must be a positive number' };
     out.width = width;
   }
   
   if (height !== undefined) {
-    if (typeof height !== 'number') return { ok: false, error: 'height must be a number' };
+    if (typeof height !== 'number' || height <= 0) 
+      return { ok: false, error: 'height must be a positive number' };
     out.height = height;
   }
   
   if (properties !== undefined) {
-    if (typeof properties !== 'object' || properties === null) return { ok: false, error: 'properties must be an object' };
+    if (typeof properties !== 'object' || properties === null) 
+      return { ok: false, error: 'properties must be an object' };
     out.properties = properties;
   }
   
@@ -129,4 +142,41 @@ export const validateConnectionCreate = (body: any): { ok: true; data: DiagramCo
   }
   
   return { ok: true, data };
+};
+
+
+export const validateConnectionUpdate = (body: any): { ok: true; data: DiagramConnectionUpdateInput } | { ok: false; error: string } => {
+  if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
+  const { label, points } = body;
+  const out: DiagramConnectionUpdateInput = {};
+  
+  if (label !== undefined) {
+    if (typeof label !== 'string') return { ok: false, error: 'label must be a string' };
+    out.label = label;
+  }
+  
+  if (points !== undefined) {
+    if (!Array.isArray(points)) return { ok: false, error: 'points must be an array' };
+    // Проверим что каждая точка имеет x и y
+    for (const point of points) {
+      if (typeof point.x !== 'number' || typeof point.y !== 'number') {
+        return { ok: false, error: 'each point must have x and y as numbers' };
+      }
+    }
+    out.points = points;
+  }
+  
+  if (Object.keys(out).length === 0) return { ok: false, error: 'At least one field must be provided' };
+  return { ok: true, data: out };
+};
+
+export const validateBendPointCreate = (body: any): { ok: true; data: BendPointCreateInput } | { ok: false; error: string } => {
+  if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
+  const { position } = body;
+  
+  if (position !== 'middle') {
+    return { ok: false, error: 'Only middle position is supported for bend points' };
+  }
+  
+  return { ok: true, data: { position } };
 };

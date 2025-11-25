@@ -72,3 +72,18 @@ export interface DiagramConnectionCreateInput {
   points?: Array<{x: number, y: number}>;
   label?: string;
 }
+
+export interface DiagramBlockUpdateInput {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  properties?: Record<string, any>;
+}
+export interface DiagramConnectionUpdateInput {
+  label?: string;
+  points?: Array<{x: number, y: number}>;
+}
+export interface BendPointCreateInput {
+  position: 'middle';
+}

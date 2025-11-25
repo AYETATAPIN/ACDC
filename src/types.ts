@@ -82,3 +82,44 @@ export interface DiagramConnectionUpdateInput {
 export interface BendPointCreateInput {
   position: 'middle';
 }
+// Добавьте эти интерфейсы в конец файла
+export interface DiagramHistoryEntry {
+    id: string;
+    diagram_id: string;
+    version: number;
+    state: DiagramSnapshot;
+    created_at: string;
+}
+
+export interface DiagramSnapshot {
+    diagram: Diagram;
+    blocks: DiagramBlock[];
+    connections: DiagramConnection[];
+}
+export interface DiagramHistoryEntry {
+    id: string;
+    diagram_id: string;
+    version: number;
+    state: DiagramSnapshot;
+    created_at: string;
+}
+
+export interface DiagramSnapshot {
+    diagram: Diagram;
+    blocks: DiagramBlock[];
+    connections: DiagramConnection[];
+}
+
+export interface DiagramHistoryEntry {
+    id: string;
+    diagram_id: string;
+    version: number;
+    state: DiagramSnapshot;
+    created_at: string;
+}
+
+export interface DiagramSnapshot {
+    diagram: Diagram;
+    blocks: DiagramBlock[];
+    connections: DiagramConnection[];
+}

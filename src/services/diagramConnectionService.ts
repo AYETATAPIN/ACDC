@@ -5,10 +5,12 @@ import { DiagramConnectionRepository } from '../repositories/diagramConnectionRe
 export class DiagramConnectionService {
     private repo: DiagramConnectionRepository;
 
+    // Убираем второй параметр - оставляем только repo
     constructor(repo: DiagramConnectionRepository) {
         this.repo = repo;
     }
 
+    // остальные методы остаются без изменений
     async getByDiagramId(diagramId: string): Promise<DiagramConnection[]> {
         return this.repo.getByDiagramId(diagramId);
     }
@@ -39,20 +41,17 @@ export class DiagramConnectionService {
         let points = connection.points;
         
         if (!points || points.length < 2) {
-            // Если точек нет или их меньше 2, создаем дефолтные
             points = [
                 { x: 200, y: 160 },
                 { x: 500, y: 160 }
             ];
         }
 
-        // Вычисляем среднюю точку
         const middlePoint = {
             x: Math.round((points[0].x + points[points.length - 1].x) / 2),
             y: Math.round((points[0].y + points[points.length - 1].y) / 2)
         };
 
-        // Вставляем среднюю точку в середину массива
         const newPoints = [
             points[0],
             middlePoint,

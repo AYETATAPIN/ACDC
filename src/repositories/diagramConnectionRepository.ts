@@ -1,33 +1,29 @@
 import { Pool } from 'pg';
 import { DiagramConnection, DiagramConnectionCreateInput, DiagramConnectionUpdateInput } from '../types.js';
 
-const mapConnectionRow = (row: any): DiagramConnection => {
-  // Правильно парсим points из JSONB
-  let points = [];
-  try {
-    points = Array.isArray(row.points) ? row.points : 
-             (typeof row.points === 'string' ? JSON.parse(row.points) : []);
-  } catch (e) {
-    points = [];
-  }
-  
-  return {
-    id: row.id,
-    diagram_id: row.diagram_id,
-    from_block_id: row.from_block_id,
-    to_block_id: row.to_block_id,
-    type: row.type,
-    points: points,
-    label: row.label,
-    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
-  };
-};
+const mapConnectionRow = (row: any): DiagramConnection => ({
+  id: row.id,
+  diagram_id: row.diagram_id,
+  from_block_id: row.from_block_id,
+  to_block_id: row.to_block_id,
+  type: row.type,
+  points: row.points,
+  label: row.label,
+  created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+});
 
 export class DiagramConnectionRepository {
   private pool: Pool;
 
   constructor(pool: Pool) {
     this.pool = pool;
+  }
+
+  // Добавляем недостающие методы
+  async getById(id: string): Promise<DiagramConnection | null> {
+    const res = await this.pool.query('SELECT * FROM diagram_connections WHERE id = $1', [id]);
+    if (res.rows.length === 0) return null;
+    return mapConnectionRow(res.rows[0]);
   }
 
   async update(id: string, input: DiagramConnectionUpdateInput): Promise<DiagramConnection | null> {
@@ -80,11 +76,5 @@ export class DiagramConnectionRepository {
 
   async deleteByDiagramId(diagramId: string): Promise<void> {
     await this.pool.query('DELETE FROM diagram_connections WHERE diagram_id = $1', [diagramId]);
-  }
-
-  async getById(id: string): Promise<DiagramConnection | null> {
-    const res = await this.pool.query('SELECT * FROM diagram_connections WHERE id = $1', [id]);
-    if (res.rows.length === 0) return null;
-    return mapConnectionRow(res.rows[0]);
   }
 }

@@ -8,12 +8,15 @@ import {DiagramConnectionRepository} from './repositories/diagramConnectionRepos
 import {DiagramService} from './services/diagramService.js';
 import {DiagramBlockService} from './services/diagramBlockService.js';
 import {DiagramConnectionService} from './services/diagramConnectionService.js';
+import {DiagramHistoryService} from './services/diagramHistoryService.js';
 import {DiagramController} from './controllers/diagramController.js';
 import {DiagramBlockController} from './controllers/diagramBlockController.js';
 import {DiagramConnectionController} from './controllers/diagramConnectionController.js';
+import {DiagramHistoryController} from './controllers/diagramHistoryController.js';
 import {createDiagramRouter} from './routes/diagrams.js';
 import {createDiagramBlockRouter} from './routes/diagramBlocks.js';
 import {createDiagramConnectionRouter} from './routes/diagramConnections.js';
+import {createDiagramHistoryRouter} from './routes/diagramHistory.js';
 import {errorHandler, notFound} from './middleware/errorHandler.js';
 import path from 'path';
 import {fileURLToPath} from 'url';
@@ -43,19 +46,22 @@ export const buildApp = async () => {
     const diagramRepo = new DiagramRepository(pool);
     const blockRepo = new DiagramBlockRepository(pool);
     const connectionRepo = new DiagramConnectionRepository(pool);
+    const historyService = new DiagramHistoryService(pool);
 
     // Сервисы
-    const diagramService = new DiagramService(diagramRepo, blockRepo, connectionRepo);
-    const blockService = new DiagramBlockService(blockRepo);
+    const diagramService = new DiagramService(diagramRepo, blockRepo, connectionRepo, historyService);
+    const blockService = new DiagramBlockService(blockRepo, historyService);
     const connectionService = new DiagramConnectionService(connectionRepo);
 
     // Контроллеры
     const diagramController = new DiagramController(diagramService);
     const blockController = new DiagramBlockController(blockService);
     const connectionController = new DiagramConnectionController(connectionService);
+    const historyController = new DiagramHistoryController(historyService);
 
     // Роуты
     app.use('/api/v1/diagrams', createDiagramRouter(diagramController));
+    app.use('/api/v1/diagrams', createDiagramHistoryRouter(historyController));
     app.use('/api/v1/diagram-blocks', createDiagramBlockRouter(blockController));
     app.use('/api/v1/diagram-connections', createDiagramConnectionRouter(connectionController));
 

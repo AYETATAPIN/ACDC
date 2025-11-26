@@ -37,8 +37,8 @@ export default {
   emits: ['tool-selected'],
   data() {
     return {
-      elementTools: ['class', 'interface', 'enum', 'actor', 'usecase', 'note', 'package'],
-      connectionTools: ['association', 'inheritance', 'composition']
+      elementTools: ['class', 'actor'],
+      connectionTools: ['association']
     }
   },
   methods: {

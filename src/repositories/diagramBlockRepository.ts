@@ -36,11 +36,17 @@ export class DiagramBlockRepository {
     }
 
     async create(id: string, input: DiagramBlockCreateInput): Promise<DiagramBlock> {
+        // Подготавливаем properties
+        const properties = input.properties || {};
+        if (typeof properties !== 'object' || properties === null) {
+            throw new Error('Properties must be an object');
+        }
+
         const res = await this.pool.query(
             `INSERT INTO diagram_blocks (id, diagram_id, type, x, y, width, height, properties)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING *`,
-            [id, input.diagram_id, input.type, input.x, input.y, input.width || 100, input.height || 60, input.properties || {}]
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING *`,
+            [id, input.diagram_id, input.type, input.x, input.y, input.width || 100, input.height || 60, JSON.stringify(properties)]
         );
         return mapBlockRow(res.rows[0]);
     }
@@ -68,7 +74,14 @@ export class DiagramBlockRepository {
         }
         if (input.properties !== undefined) {
             fields.push(`properties = $${idx++}`);
-            values.push(input.properties);
+
+            // Убедимся, что properties - это объект
+            if (typeof input.properties !== 'object' || input.properties === null) {
+                throw new Error('Properties must be an object');
+            }
+
+            // Преобразуем в JSON строку для безопасного хранения
+            values.push(JSON.stringify(input.properties));
         }
 
         if (fields.length === 0) return null;

@@ -38,18 +38,37 @@ export class DiagramService {
         // Если переданы элементы, создаем блоки
         if (input.elements && Array.isArray(input.elements)) {
             for (const element of input.elements) {
-                await this.blockRepo.create(uuidv4(), {
+                const blockId = element.id && typeof element.id === 'string' ? element.id : uuidv4();
+                await this.blockRepo.create(blockId, {
                     diagram_id: id,
                     type: element.type,
-                    x: element.x,
-                    y: element.y,
-                    width: element.width || 100,
-                    height: element.height || 60,
+                    x: Number(element.x) || 0,
+                    y: Number(element.y) || 0,
+                    width: Number(element.width) || 100,
+                    height: Number(element.height) || 60,
                     properties: {
                         text: element.text,
                         ...element.properties
                     }
                 });
+            }
+
+            if (input.connections && Array.isArray(input.connections)) {
+                // Подготовим карту блоков для валидации
+                const blocks = await this.blockRepo.getByDiagramId(id);
+                const blockIds = new Set(blocks.map(b => b.id));
+
+                for (const connection of input.connections) {
+                    if (!blockIds.has(connection.from) || !blockIds.has(connection.to)) continue;
+                    await this.connectionRepo.create(uuidv4(), {
+                        diagram_id: id,
+                        from_block_id: connection.from,
+                        to_block_id: connection.to,
+                        type: connection.type,
+                        label: connection.label,
+                        points: connection.points
+                    });
+                }
             }
         }
 
@@ -69,13 +88,14 @@ export class DiagramService {
 
             if (Array.isArray(input.elements)) {
                 for (const element of input.elements) {
-                    await this.blockRepo.create(uuidv4(), {
+                    const blockId = element.id && typeof element.id === 'string' ? element.id : uuidv4();
+                    await this.blockRepo.create(blockId, {
                         diagram_id: id,
                         type: element.type,
-                        x: element.x,
-                        y: element.y,
-                        width: element.width || 100,
-                        height: element.height || 60,
+                        x: Number(element.x) || 0,
+                        y: Number(element.y) || 0,
+                        width: Number(element.width) || 100,
+                        height: Number(element.height) || 60,
                         properties: {
                             text: element.text,
                             ...element.properties
@@ -83,33 +103,20 @@ export class DiagramService {
                     });
                 }
 
-                // Если есть связи, создаем их
                 if (input.connections && Array.isArray(input.connections)) {
-                    // Для этого нужно получить ID созданных блоков
                     const blocks = await this.blockRepo.getByDiagramId(id);
+                    const blockIds = new Set(blocks.map(b => b.id));
 
                     for (const connection of input.connections) {
-                        // Находим блоки по координатам или другим свойствам
-                        const fromBlock = blocks.find(b =>
-                            Math.abs(b.x - connection.fromElement?.x) < 10 &&
-                            Math.abs(b.y - connection.fromElement?.y) < 10
-                        );
-
-                        const toBlock = blocks.find(b =>
-                            Math.abs(b.x - connection.toElement?.x) < 10 &&
-                            Math.abs(b.y - connection.toElement?.y) < 10
-                        );
-
-                        if (fromBlock && toBlock) {
-                            await this.connectionRepo.create(uuidv4(), {
-                                diagram_id: id,
-                                from_block_id: fromBlock.id,
-                                to_block_id: toBlock.id,
-                                type: connection.type,
-                                label: connection.label,
-                                points: connection.points
-                            });
-                        }
+                        if (!blockIds.has(connection.from) || !blockIds.has(connection.to)) continue;
+                        await this.connectionRepo.create(uuidv4(), {
+                            diagram_id: id,
+                            from_block_id: connection.from,
+                            to_block_id: connection.to,
+                            type: connection.type,
+                            label: connection.label,
+                            points: connection.points
+                        });
                     }
                 }
             }

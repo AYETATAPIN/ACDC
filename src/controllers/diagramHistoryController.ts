@@ -41,4 +41,14 @@ export class DiagramHistoryController {
 
         return res.json({version: result.version, state: result.state});
     };
+
+    current = async (req: Request, res: Response) => {
+        const {diagramId} = req.params;
+        const result = await this.service.getCurrentState(diagramId);
+
+        if (result.status === 'not_found') return res.status(404).json({error: 'Diagram not found'});
+        if (result.status === 'no_history') return res.status(404).json({error: 'Diagram has no history yet'});
+
+        return res.json({version: result.version, state: result.state});
+    };
 }

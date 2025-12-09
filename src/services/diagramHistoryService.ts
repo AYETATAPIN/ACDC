@@ -1,6 +1,6 @@
 import {Pool, PoolClient} from 'pg';
 import {v4 as uuidv4} from 'uuid';
-import { Diagram, DiagramBlock, DiagramConnection } from '../types.js';
+import { Diagram, DiagramBlock, DiagramConnection, Point } from '../types.js';
 import type { DiagramHistoryEntry, DiagramSnapshot } from '../types.js';
 
 type UndoRedoResult =
@@ -11,6 +11,11 @@ type UndoRedoResult =
 type HistoryListResult =
     | { status: 'ok'; currentVersion: number; entries: Array<Pick<DiagramHistoryEntry, 'version' | 'created_at'>> }
     | { status: 'not_found' };
+
+type CurrentStateResult =
+    | { status: 'ok'; version: number; state: DiagramSnapshot }
+    | { status: 'not_found' }
+    | { status: 'no_history' };
 
 type DiagramRow = {
     id: string;
@@ -31,29 +36,50 @@ const mapDiagramRow = (row: DiagramRow): Diagram => ({
     updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
 });
 
+const toNumber = (value: any): number => Number(value ?? 0);
+
 const mapBlockRow = (row: any): DiagramBlock => ({
     id: row.id,
     diagram_id: row.diagram_id,
     type: row.type,
-    x: row.x,
-    y: row.y,
-    width: row.width,
-    height: row.height,
-    properties: row.properties,
+    x: toNumber(row.x),
+    y: toNumber(row.y),
+    width: toNumber(row.width),
+    height: toNumber(row.height),
+    properties: row.properties ?? {},
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
 });
 
-const mapConnectionRow = (row: any): DiagramConnection => ({
-    id: row.id,
-    diagram_id: row.diagram_id,
-    from_block_id: row.from_block_id,
-    to_block_id: row.to_block_id,
-    type: row.type,
-    points: row.points,
-    label: row.label,
-    created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
-});
+const mapConnectionRow = (row: any): DiagramConnection => {
+    let points: Point[] = [];
+
+    if (row.points) {
+        if (typeof row.points === 'string') {
+            try {
+                points = JSON.parse(row.points);
+            } catch {
+                points = [];
+            }
+        } else if (Array.isArray(row.points)) {
+            points = row.points.map((p: any) => ({
+                x: Number(p.x) || 0,
+                y: Number(p.y) || 0,
+            }));
+        }
+    }
+
+    return {
+        id: row.id,
+        diagram_id: row.diagram_id,
+        from_block_id: row.from_block_id,
+        to_block_id: row.to_block_id,
+        type: row.type,
+        points,
+        label: row.label,
+        created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    };
+};
 
 export class DiagramHistoryService {
     private pool: Pool;
@@ -159,6 +185,26 @@ export class DiagramHistoryService {
         }
     }
 
+    async getCurrentState(diagramId: string): Promise<CurrentStateResult> {
+        const client = await this.pool.connect();
+        try {
+            const diagramRow = await this.getDiagramRow(client, diagramId);
+            if (!diagramRow) return {status: 'not_found'};
+
+            const version = diagramRow.current_version ?? 0;
+            if (version === 0) {
+                return {status: 'no_history'};
+            }
+
+            const snapshot = await this.getSnapshot(client, diagramId, version);
+            if (!snapshot) return {status: 'no_history'};
+
+            return {status: 'ok', version, state: snapshot};
+        } finally {
+            client.release();
+        }
+    }
+
     private async restoreToVersion(diagramId: string, direction: 'undo' | 'redo'): Promise<UndoRedoResult> {
         const client = await this.pool.connect();
         try {
@@ -243,10 +289,10 @@ export class DiagramHistoryService {
                     block.id,
                     block.diagram_id,
                     block.type,
-                    block.x,
-                    block.y,
-                    block.width,
-                    block.height,
+                    Number(block.x ?? 0),
+                    Number(block.y ?? 0),
+                    Number(block.width ?? 0),
+                    Number(block.height ?? 0),
                     JSON.stringify(block.properties), // ПРАВИЛЬНАЯ сериализация
                     block.created_at,
                     block.updated_at,

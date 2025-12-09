@@ -14,19 +14,83 @@ const TYPES: DiagramType[] = ['class', 'use_case', 'free_mode'];
 const isDiagramType = (value: unknown): value is DiagramType =>
   typeof value === 'string' && (TYPES as ReadonlyArray<DiagramType>).includes(value as DiagramType);
 
-export const validateCreate = (body: any): { ok: true; data: DiagramCreateInput } | { ok: false; error: string } => {
+type FrontendElement = {
+  id?: string;
+  type: string;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  text?: string;
+  properties?: Record<string, any>;
+};
+
+type FrontendConnection = {
+  id?: string;
+  from: string;
+  to: string;
+  type: string;
+  label?: string;
+  points?: Array<{ x: number; y: number }>;
+};
+
+const validateElementsInput = (value: any): FrontendElement[] | null => {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) return null;
+  const result: FrontendElement[] = [];
+  for (const el of value) {
+    if (!el || typeof el !== 'object') return null;
+    const { id, type, x, y, width, height, text, properties } = el;
+    if (typeof type !== 'string' || typeof x !== 'number' || typeof y !== 'number') return null;
+    if (width !== undefined && typeof width !== 'number') return null;
+    if (height !== undefined && typeof height !== 'number') return null;
+    if (text !== undefined && typeof text !== 'string') return null;
+    if (properties !== undefined && (typeof properties !== 'object' || properties === null)) return null;
+    if (id !== undefined && typeof id !== 'string') return null;
+    result.push({ id, type, x, y, width, height, text, properties });
+  }
+  return result;
+};
+
+const validateConnectionsInput = (value: any): FrontendConnection[] | null => {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) return null;
+  const result: FrontendConnection[] = [];
+  for (const conn of value) {
+    if (!conn || typeof conn !== 'object') return null;
+    const { id, from, to, type, label, points } = conn;
+    if (typeof from !== 'string' || typeof to !== 'string' || typeof type !== 'string') return null;
+    if (id !== undefined && typeof id !== 'string') return null;
+    if (label !== undefined && typeof label !== 'string') return null;
+    if (points !== undefined) {
+      if (!Array.isArray(points)) return null;
+      for (const p of points) {
+        if (!p || typeof p !== 'object') return null;
+        if (typeof p.x !== 'number' || typeof p.y !== 'number') return null;
+      }
+    }
+    result.push({ id, from, to, type, label, points });
+  }
+  return result;
+};
+
+export const validateCreate = (body: any): { ok: true; data: DiagramCreateInput & { elements?: FrontendElement[]; connections?: FrontendConnection[] } } | { ok: false; error: string } => {
   if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
   const { name, type, svg_data } = body;
   if (typeof name !== 'string' || !name.trim()) return { ok: false, error: 'name is required' };
   if (!isDiagramType(type)) return { ok: false, error: 'type must be one of class|use_case|free_mode' };
   if (typeof svg_data !== 'string' || !svg_data.trim()) return { ok: false, error: 'svg_data is required' };
-  return { ok: true, data: { name: name.trim(), type, svg_data } };
+  const elements = validateElementsInput(body.elements);
+  if (body.elements !== undefined && elements === null) return { ok: false, error: 'elements has invalid shape' };
+  const connections = validateConnectionsInput(body.connections);
+  if (body.connections !== undefined && connections === null) return { ok: false, error: 'connections has invalid shape' };
+  return { ok: true, data: { name: name.trim(), type, svg_data, elements: elements ?? undefined, connections: connections ?? undefined } };
 };
 
-export const validateUpdate = (body: any): { ok: true; data: DiagramUpdateInput } | { ok: false; error: string } => {
+export const validateUpdate = (body: any): { ok: true; data: DiagramUpdateInput & { elements?: FrontendElement[]; connections?: FrontendConnection[] } } | { ok: false; error: string } => {
   if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
   const { name, type, svg_data } = body;
-  const out: DiagramUpdateInput = {};
+  const out: DiagramUpdateInput & { elements?: FrontendElement[]; connections?: FrontendConnection[] } = {};
   if (name !== undefined) {
     if (typeof name !== 'string' || !name.trim()) return { ok: false, error: 'name must be a non-empty string' };
     out.name = name.trim();
@@ -39,6 +103,12 @@ export const validateUpdate = (body: any): { ok: true; data: DiagramUpdateInput 
     if (typeof svg_data !== 'string' || !svg_data.trim()) return { ok: false, error: 'svg_data must be a non-empty string' };
     out.svg_data = svg_data;
   }
+  const elements = validateElementsInput(body.elements);
+  if (body.elements !== undefined && elements === null) return { ok: false, error: 'elements has invalid shape' };
+  if (elements) out.elements = elements;
+  const connections = validateConnectionsInput(body.connections);
+  if (body.connections !== undefined && connections === null) return { ok: false, error: 'connections has invalid shape' };
+  if (connections) out.connections = connections;
   if (Object.keys(out).length === 0) return { ok: false, error: 'At least one field must be provided' };
   return { ok: true, data: out };
 };

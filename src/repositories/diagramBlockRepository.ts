@@ -1,15 +1,17 @@
 import {Pool} from 'pg';
 import {DiagramBlock, DiagramBlockCreateInput, DiagramBlockUpdateInput} from '../types.js';
 
+const toNumber = (value: any): number => Number(value ?? 0);
+
 const mapBlockRow = (row: any): DiagramBlock => ({
     id: row.id,
     diagram_id: row.diagram_id,
     type: row.type,
-    x: row.x,
-    y: row.y,
-    width: row.width,
-    height: row.height,
-    properties: row.properties,
+    x: toNumber(row.x),
+    y: toNumber(row.y),
+    width: toNumber(row.width),
+    height: toNumber(row.height),
+    properties: row.properties ?? {},
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
 });

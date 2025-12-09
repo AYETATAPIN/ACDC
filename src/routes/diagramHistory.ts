@@ -7,6 +7,7 @@ export const createDiagramHistoryRouter = (controller: DiagramHistoryController)
     const router = Router();
 
     router.get('/:diagramId/history', validateUUIDParam('diagramId'), asyncHandler(controller.history));
+    router.get('/:diagramId/state', validateUUIDParam('diagramId'), asyncHandler(controller.current));
     router.post('/:diagramId/undo', validateUUIDParam('diagramId'), asyncHandler(controller.undo));
     router.post('/:diagramId/redo', validateUUIDParam('diagramId'), asyncHandler(controller.redo));
 

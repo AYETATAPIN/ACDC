@@ -12,7 +12,16 @@
           <option value="use_case">Use Case</option>
           <option value="free_mode">Free Mode</option>
         </select>
-        <button @click="saveDiagram">Save</button>
+        <button
+            @click="snapToGrid = !snapToGrid"
+            :class="{ active: snapToGrid }"
+            :title="snapToGrid ? 'Привязка к сетке: ВКЛ' : 'Привязка к сетке: ВЫКЛ'"
+        >
+          {{ snapToGrid ? '📐 Сетка: ВКЛ' : '📏 Сетка: ВЫКЛ' }}
+        </button>
+        <button @click="saveDiagram" :class="{ 'has-changes': hasUnsavedChanges }">
+          {{ hasUnsavedChanges ? '💾 Save*' : '💾 Save' }}
+        </button>
         <button @click="newDiagram">New</button>
         <button :disabled="!currentDiagramId" @click="undoDiagram">Undo</button>
         <button :disabled="!currentDiagramId" @click="redoDiagram">Redo</button>
@@ -21,6 +30,13 @@
         Текущий инструмент: {{ currentTool }} | Элементов: {{ elements.length }}
       </div>
     </header>
+
+    <div v-if="errorMessage" class="error-toast">
+      <div class="error-content">
+        <strong>Ошибка:</strong> {{ errorMessage }}
+        <button @click="errorMessage = null" class="error-close">×</button>
+      </div>
+    </div>
 
     <div class="main">
       <div class="toolbar">
@@ -40,6 +56,12 @@
       </div>
 
       <div class="canvas"
+           :style="{
+         background: snapToGrid
+             ? 'linear-gradient(90deg, #f0f0f0 1px, transparent 1px), linear-gradient(#f0f0f0 1px, transparent 1px)'
+             : 'white',
+         backgroundSize: snapToGrid ? '10px 10px' : 'auto'
+     }"
            @click="handleCanvasClick"
            @mousedown="handleMouseDown"
            @mousemove="handleMouseMove"
@@ -128,6 +150,9 @@
             :class="{ active: entry.version === currentVersion }"
         >
           <div class="version">v{{ entry.version }}</div>
+          <div class="version-info" v-if="currentDiagramId">
+            Версия: {{ currentVersion }} | Снапшотов: {{ historyEntries.length }}
+          </div>
           <div class="time">{{ formatDate(entry.created_at) }}</div>
         </div>
       </aside>
@@ -140,6 +165,10 @@ export default {
   name: 'App',
   data() {
     return {
+      lastSavedState: null,
+      hasUnsavedChanges: false,
+      snapToGrid: true,
+      gridSize: 10,
       diagramName: '',
       diagramType: 'class',
       currentTool: 'class',
@@ -155,10 +184,102 @@ export default {
       tempConnection: null,
       dragElement: null,
       dragOffset: { x: 0, y: 0 },
-      isDragging: false
+      isDragging: false,
+      errorMessage: null,
+      isLoading: false
     }
   },
+  mounted() {
+    // Добавляем глобальные обработчики для гарантированного отлова mouseup
+    window.addEventListener('mouseup', this.handleGlobalMouseUp);
+    window.addEventListener('mouseleave', this.handleGlobalMouseUp);
+  },
+
+  beforeUnmount() {
+    // Очищаем глобальные обработчики при уничтожении компонента
+    window.removeEventListener('mouseup', this.handleGlobalMouseUp);
+    window.removeEventListener('mouseleave', this.handleGlobalMouseUp);
+  },
+
+  watch: {
+    elements: {
+      handler() {
+        this.checkForChanges();
+      },
+      deep: true
+    },
+    connections: {
+      handler() {
+        this.checkForChanges();
+      },
+      deep: true
+    },
+    diagramName() {
+      this.checkForChanges();
+    },
+    diagramType() {
+      this.checkForChanges();
+    }
+  },
+
   methods: {
+    checkForChanges() {
+      const currentState = {
+        elements: this.elements,
+        connections: this.connections,
+        diagramName: this.diagramName,
+        diagramType: this.diagramType
+      };
+
+      // Сравниваем с последним сохраненным состоянием
+      if (!this.lastSavedState ||
+          JSON.stringify(currentState) !== JSON.stringify(this.lastSavedState)) {
+        this.hasUnsavedChanges = true;
+      } else {
+        this.hasUnsavedChanges = false;
+      }
+    },
+
+    snapToGridValue(value) {
+      if (!this.snapToGrid) return value;
+      return Math.round(value / this.gridSize) * this.gridSize;
+    },
+
+    snapCoordinates(x, y) {
+      const snappedX = this.snapToGrid ? Math.round(x / this.gridSize) * this.gridSize : x;
+      const snappedY = this.snapToGrid ? Math.round(y / this.gridSize) * this.gridSize : y;
+
+      if (this.snapToGrid && (snappedX !== x || snappedY !== y)) {
+        console.log(`Snapped: (${x}, ${y}) → (${snappedX}, ${snappedY})`);
+      }
+
+      return { x: snappedX, y: snappedY };
+    },
+
+    showError(message) {
+      console.error('Error:', message);
+      this.errorMessage = message;
+      // Автоматически скрываем ошибку через 5 секунд
+      setTimeout(() => {
+        this.errorMessage = null;
+      }, 5000);
+    },
+
+    handleGlobalMouseUp(event) {
+      // Гарантированно останавливаем перетаскивание, даже если мышь вышла за пределы компонента
+      if (this.isDragging) {
+        console.log('Global mouse up - stopping drag');
+        this.isDragging = false;
+        this.dragElement = null;
+      }
+
+      // НЕ отменяем режим соединения при глобальном mouseup,
+      // так как пользователь может кликать на элементы для создания связи
+      // Режим соединения отменяется только:
+      // 1. При клике на пустое место (обрабатывается в handleCanvasClick)
+      // 2. При успешном создании связи (обрабатывается в createConnection)
+    },
+
     formatDate(dateString) {
       return new Date(dateString).toLocaleString()
     },
@@ -188,8 +309,18 @@ export default {
       const connectionTools = ['association', 'inheritance', 'composition'];
 
       if (connectionTools.includes(this.currentTool)) {
+        // ОТМЕНА СОЕДИНЕНИЯ при клике на пустое место
+        const previouslySelectedId = this.connectionStart?.id;
         this.connectionStart = null;
         this.isConnecting = false;
+
+        // Сбрасываем выделение элемента, если он был выбран как начало соединения
+        if (this.selectedElement && this.selectedElement.id === previouslySelectedId) {
+          this.selectedElement = null;
+        }
+
+        // Также сбрасываем текущий инструмент, чтобы пользователь мог сразу выбрать другой
+        this.currentTool = null;
         console.log('Clicked outside elements in connection mode - reset');
       } else {
         this.createElement(this.currentTool, x, y);
@@ -286,11 +417,7 @@ export default {
     },
 
     handleMouseUp() {
-      if (this.isDragging) {
-        console.log('Stop dragging:', this.dragElement);
-        this.isDragging = false;
-        this.dragElement = null;
-      }
+      this.handleGlobalMouseUp(); // Используем общий метод
     },
 
     updateConnections() {
@@ -307,18 +434,43 @@ export default {
     moveElement(elementId, newX, newY) {
       const element = this.elements.find(el => el.id === elementId);
       if (element) {
-        element.x = newX;
-        element.y = newY;
+        const snapped = this.snapCoordinates(newX, newY);
+        element.x = snapped.x;
+        element.y = snapped.y;
       }
     },
 
+    generateId() {
+      return this.generateUUID();
+    },
 
     getElementAtPosition(x, y) {
+      // Ищем с конца, чтобы верхние элементы (последние добавленные) были приоритетнее
       for (let i = this.elements.length - 1; i >= 0; i--) {
         const element = this.elements[i];
-        if (x >= element.x && x <= element.x + element.width &&
-            y >= element.y && y <= element.y + element.height) {
+
+        // Быстрая проверка: если координаты явно вне bounding box, пропускаем
+        if (x < element.x || x > element.x + element.width ||
+            y < element.y || y > element.y + element.height) {
+          continue;
+        }
+
+        // Для прямоугольных элементов - это все проверки
+        if (element.type !== 'usecase') {
           return element;
+        }
+
+        // Для usecase (эллипса) нужна дополнительная проверка
+        if (element.type === 'usecase') {
+          // Проверка попадания в эллипс: (x-cx)²/a² + (y-cy)²/b² <= 1
+          const cx = element.x + element.width / 2;
+          const cy = element.y + element.height / 2;
+          const a = element.width / 2;
+          const b = element.height / 2;
+          const normalized = Math.pow((x - cx) / a, 2) + Math.pow((y - cy) / b, 2);
+          if (normalized <= 1) {
+            return element;
+          }
         }
       }
       return null;
@@ -328,7 +480,7 @@ export default {
       console.log('Creating connection from:', fromElement, 'to:', toElement);
 
       const connection = {
-        id: Date.now().toString(),
+        id: this.generateId(),
         from: fromElement.id,
         to: toElement.id,
         type: this.currentTool,
@@ -343,38 +495,58 @@ export default {
     },
 
     async saveDiagram() {
+      this.isLoading = true;
+      this.errorMessage = null;
+
       try {
-        const payload = {
+        // Подготавливаем данные для сохранения
+        const diagramData = {
           name: this.diagramName || 'Untitled',
           type: this.diagramType,
           svg_data: this.exportToSvg()
-        }
+        };
 
-        let response
+        console.log('Saving diagram...');
+
+        let response;
         if (this.currentDiagramId) {
           response = await fetch(`/api/v1/diagrams/${this.currentDiagramId}`, {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-          })
+            body: JSON.stringify(diagramData)
+          });
         } else {
           response = await fetch('/api/v1/diagrams', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(payload)
-          })
+            body: JSON.stringify(diagramData)
+          });
         }
 
         if (!response.ok) {
-          throw new Error(`Failed: ${response.status} ${await response.text()}`)
+          const errorText = await response.text();
+          throw new Error(`Ошибка сохранения: ${response.status} ${errorText}`);
         }
 
-        const result = await response.json()
-        this.currentDiagramId = result.id || this.currentDiagramId
-        await this.loadHistory()
-        alert('Diagram saved and snapshot recorded!')
+        const result = await response.json();
+        this.currentDiagramId = result.id || this.currentDiagramId;
+
+        // Загружаем историю для отображения
+        await this.loadHistory();
+
+        this.lastSavedState = {
+          elements: [...this.elements],
+          connections: [...this.connections],
+          diagramName: this.diagramName,
+          diagramType: this.diagramType
+        };
+        this.hasUnsavedChanges = false;
+
+        alert('Диаграмма сохранена! Снапшот создан.');
       } catch (error) {
-        alert('Error saving: ' + error.message)
+        this.showError(error.message);
+      } finally {
+        this.isLoading = false;
       }
     },
 
@@ -400,44 +572,144 @@ export default {
     },
 
     async undoDiagram() {
-      if (!this.currentDiagramId) return
-      const res = await fetch(`/api/v1/diagrams/${this.currentDiagramId}/undo`, {method: 'POST'})
-      if (!res.ok) {
-        alert('Nothing to undo')
-        return
+      if (!this.currentDiagramId) {
+        this.showError('Сначала создайте или загрузите диаграмму');
+        return;
       }
-      const data = await res.json()
-      this.applySnapshot(data.state)
-      this.currentVersion = data.version
-      await this.loadHistory()
+
+      this.isLoading = true;
+      try {
+        const res = await fetch(`/api/v1/diagrams/${this.currentDiagramId}/undo`, {method: 'POST'});
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          if (res.status === 400 && errorData.error?.includes('empty')) {
+            this.showError('Нечего отменять');
+          } else {
+            throw new Error(`Ошибка отмены: ${res.status}`);
+          }
+          return;
+        }
+        const data = await res.json();
+        console.log('Undo response - full data:', JSON.stringify(data, null, 2));
+        this.applySnapshot(data.state);
+        this.lastSavedState = {
+          elements: [...this.elements],
+          connections: [...this.connections],
+          diagramName: this.diagramName,
+          diagramType: this.diagramType
+        };
+        this.hasUnsavedChanges = false;
+        this.currentVersion = data.version;
+        await this.loadHistory();
+      } catch (error) {
+        this.showError(error.message);
+      } finally {
+        this.isLoading = false;
+      }
     },
 
     async redoDiagram() {
-      if (!this.currentDiagramId) return
-      const res = await fetch(`/api/v1/diagrams/${this.currentDiagramId}/redo`, {method: 'POST'})
-      if (!res.ok) {
-        alert('Nothing to redo')
-        return
+      if (!this.currentDiagramId) {
+        this.showError('Сначала создайте или загрузите диаграмму');
+        return;
       }
-      const data = await res.json()
-      this.applySnapshot(data.state)
-      this.currentVersion = data.version
-      await this.loadHistory()
+
+      this.isLoading = true;
+      try {
+        const res = await fetch(`/api/v1/diagrams/${this.currentDiagramId}/redo`, {method: 'POST'});
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          if (res.status === 400 && errorData.error?.includes('empty')) {
+            this.showError('Нечего возвращать');
+          } else {
+            throw new Error(`Ошибка возврата: ${res.status}`);
+          }
+          return;
+        }
+        const data = await res.json();
+        console.log('Redo response - full data:', JSON.stringify(data, null, 2));
+        this.applySnapshot(data.state);
+        this.lastSavedState = {
+          elements: [...this.elements],
+          connections: [...this.connections],
+          diagramName: this.diagramName,
+          diagramType: this.diagramType
+        };
+        this.hasUnsavedChanges = false;
+        this.currentVersion = data.version;
+        await this.loadHistory();
+      } catch (error) {
+        this.showError(error.message);
+      } finally {
+        this.isLoading = false;
+      }
     },
 
     applySnapshot(snapshot) {
-      if (!snapshot) return
-      this.diagramName = snapshot.diagram?.name || this.diagramName
-      this.diagramType = snapshot.diagram?.type || this.diagramType
-      this.elements = (snapshot.blocks || []).map((b) => ({
-        id: b.id,
-        type: b.type,
-        x: b.x,
-        y: b.y,
-        width: b.width,
-        height: b.height,
-        text: (b.properties && (b.properties.label || b.properties.name)) || b.type
-      }))
+      if (!snapshot) return;
+
+      console.log('Applying snapshot. Blocks:', snapshot.blocks?.length, 'Connections:', snapshot.connections?.length);
+
+      // Обновляем информацию о диаграмме
+      this.diagramName = snapshot.diagram?.name || this.diagramName;
+      this.diagramType = snapshot.diagram?.type || this.diagramType;
+
+      // Преобразуем блоки в элементы
+      this.elements = (snapshot.blocks || []).map((block) => {
+        return {
+          id: block.id,
+          type: block.type,
+          x: Number(block.x),
+          y: Number(block.y),
+          width: Number(block.width),
+          height: Number(block.height),
+          text: block.properties?.text || block.properties?.label || block.type,
+          properties: block.properties || {}
+        };
+      });
+
+      // Преобразуем connections
+      this.connections = (snapshot.connections || []).map((conn) => {
+        // Обрабатываем points
+        let points = [];
+        if (conn.points) {
+          if (typeof conn.points === 'string') {
+            try {
+              points = JSON.parse(conn.points);
+            } catch {
+              points = [];
+            }
+          } else if (Array.isArray(conn.points)) {
+            points = conn.points;
+          }
+        }
+
+        // Если points пустые, вычисляем их из блоков
+        if (points.length === 0) {
+          const fromElement = this.elements.find(el => el.id === conn.from_block_id);
+          const toElement = this.elements.find(el => el.id === conn.to_block_id);
+
+          if (fromElement && toElement) {
+            points = this.calculateConnectionPoints(fromElement, toElement);
+          }
+        }
+
+        return {
+          id: conn.id,
+          from: conn.from_block_id,
+          to: conn.to_block_id,
+          type: conn.type,
+          label: conn.label || '',
+          points: points
+        };
+      });
+
+      // Сбрасываем выделение
+      this.selectedElement = null;
+      this.connectionStart = null;
+      this.isConnecting = false;
+
+      console.log('Applied elements:', this.elements.length, 'connections:', this.connections.length);
     },
 
     exportToSvg() {
@@ -459,19 +731,32 @@ export default {
     createElement(type, x, y) {
       console.log('Creating element:', type, 'at', x, y);
 
+      const uuid = this.generateUUID();
+      const snapped = this.snapCoordinates(x - 60, y - 30);
+
       const element = {
-        id: Date.now().toString(),
+        id: uuid,
         type: type,
-        x: x - 60,
-        y: y - 30,
+        x: snapped.x,
+        y: snapped.y,
         width: 120,
         height: 60,
-        text: this.getDefaultText(type)
+        text: this.getDefaultText(type),
+        properties: {}
       };
 
       console.log('New element:', element);
       this.elements.push(element);
       this.selectedElement = element;
+    },
+
+    generateUUID() {
+      // Генерируем UUID v4
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
     },
 
 
@@ -690,4 +975,67 @@ export default {
   min-height: 520px;
   user-select: none;
 }
+
+.error-toast {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #e74c3c;
+  color: white;
+  padding: 1rem;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 9999;
+  max-width: 400px;
+  animation: slideIn 0.3s ease;
+}
+
+.error-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.error-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.version-info {
+  background: #ecf0f1;
+  color: #2c3e50;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  margin-left: 0.5rem;
+}
+
+button.has-changes {
+  background: #f39c12 !important;
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
 </style>

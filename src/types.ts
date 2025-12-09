@@ -1,5 +1,10 @@
 export type DiagramType = 'class' | 'use_case' | 'free_mode';
 
+export type Point = {
+    x: number;
+    y: number;
+};
+
 export interface Diagram {
   id: string;
   name: string;
@@ -55,59 +60,33 @@ export interface DiagramBlockUpdateInput {
 
 // Типы для связей
 export interface DiagramConnection {
-  id: string;
-  diagram_id: string;
-  from_block_id: string;
-  to_block_id: string;
-  type: string;
-  points: Array<{x: number, y: number}>;
-  label?: string;
-  created_at: string;
+    id: string;
+    diagram_id: string;
+    from_block_id: string;
+    to_block_id: string;
+    type: string;
+    points: Point[]; // Только массив
+    label?: string;
+    created_at: string;
 }
 
 export interface DiagramConnectionCreateInput {
-  diagram_id: string;
-  from_block_id: string;
-  to_block_id: string;
-  type: string;
-  points?: Array<{x: number, y: number}>;
-  label?: string;
+    diagram_id: string;
+    from_block_id: string;
+    to_block_id: string;
+    type: string;
+    points?: Point[]; // Только массив
+    label?: string;
 }
 
+
 export interface DiagramConnectionUpdateInput {
-  label?: string;
-  points?: Array<{x: number, y: number}>;
+    label?: string;
+    points?: Point[]; // Только массив
 }
 
 export interface BendPointCreateInput {
   position: 'middle';
-}
-// Добавьте эти интерфейсы в конец файла
-export interface DiagramHistoryEntry {
-    id: string;
-    diagram_id: string;
-    version: number;
-    state: DiagramSnapshot;
-    created_at: string;
-}
-
-export interface DiagramSnapshot {
-    diagram: Diagram;
-    blocks: DiagramBlock[];
-    connections: DiagramConnection[];
-}
-export interface DiagramHistoryEntry {
-    id: string;
-    diagram_id: string;
-    version: number;
-    state: DiagramSnapshot;
-    created_at: string;
-}
-
-export interface DiagramSnapshot {
-    diagram: Diagram;
-    blocks: DiagramBlock[];
-    connections: DiagramConnection[];
 }
 
 export interface DiagramHistoryEntry {

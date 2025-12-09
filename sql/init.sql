@@ -13,20 +13,22 @@ CREATE TABLE IF NOT EXISTS diagrams (
 CREATE INDEX IF NOT EXISTS idx_diagrams_created_at ON diagrams (created_at DESC);
 
 -- Новая таблица для блоков диаграмм
+-- В init.sql изменить CREATE TABLE для diagram_blocks:
 CREATE TABLE IF NOT EXISTS diagram_blocks (
   id UUID PRIMARY KEY,
   diagram_id UUID NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
-  x INTEGER NOT NULL DEFAULT 0,
-  y INTEGER NOT NULL DEFAULT 0,
-  width INTEGER NOT NULL DEFAULT 100,
-  height INTEGER NOT NULL DEFAULT 60,
+  x NUMERIC NOT NULL DEFAULT 0,  -- ИЗМЕНЕНО с INTEGER на NUMERIC
+  y NUMERIC NOT NULL DEFAULT 0,  -- ИЗМЕНЕНО
+  width NUMERIC NOT NULL DEFAULT 100,  -- ИЗМЕНЕНО
+  height NUMERIC NOT NULL DEFAULT 60,  -- ИЗМЕНЕНО
   properties JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Новая таблица для связей между блоками
+CREATE INDEX IF NOT EXISTS idx_diagram_blocks_diagram_id ON diagram_blocks (diagram_id);
+
 CREATE TABLE IF NOT EXISTS diagram_connections (
   id UUID PRIMARY KEY,
   diagram_id UUID NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
@@ -38,12 +40,11 @@ CREATE TABLE IF NOT EXISTS diagram_connections (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_diagrams_created_at ON diagrams (created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_diagram_blocks_diagram_id ON diagram_blocks (diagram_id);
 CREATE INDEX IF NOT EXISTS idx_diagram_connections_diagram_id ON diagram_connections (diagram_id);
 
 -- История изменений диаграммы для undo/redo
-ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS current_version INTEGER NOT NULL DEFAULT 0;
+-- ПРИМЕЧАНИЕ: current_version уже добавлен в CREATE TABLE выше
+-- ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS current_version INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE IF NOT EXISTS diagram_history (
   id UUID PRIMARY KEY,

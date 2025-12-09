@@ -1,16 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
-import { DiagramConnection, DiagramConnectionCreateInput, DiagramConnectionUpdateInput } from '../types.js';
+import { DiagramConnection, DiagramConnectionCreateInput, DiagramConnectionUpdateInput, Point } from '../types.js';
 import { DiagramConnectionRepository } from '../repositories/diagramConnectionRepository.js';
 
 export class DiagramConnectionService {
     private repo: DiagramConnectionRepository;
 
-    // Убираем второй параметр - оставляем только repo
     constructor(repo: DiagramConnectionRepository) {
         this.repo = repo;
     }
 
-    // остальные методы остаются без изменений
     async getByDiagramId(diagramId: string): Promise<DiagramConnection[]> {
         return this.repo.getByDiagramId(diagramId);
     }
@@ -38,8 +36,9 @@ export class DiagramConnectionService {
         const connection = await this.repo.getById(id);
         if (!connection) return null;
 
-        let points = connection.points;
-        
+        // Используем существующие points из connection (они уже распарсены в репозитории)
+        let points = connection.points as Point[];
+
         if (!points || points.length < 2) {
             points = [
                 { x: 200, y: 160 },

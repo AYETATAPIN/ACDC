@@ -1,10 +1,8 @@
 import {Pool, PoolClient} from 'pg';
 import {v4 as uuidv4} from 'uuid';
-import { Diagram } from '../types.js';
-import { DiagramBlock } from '../types.js';
-import { DiagramConnection } from '../types.js';
-import type { DiagramHistoryEntry } from '../types.js';
-import type { DiagramSnapshot } from '../types.js';
+import { Diagram, DiagramBlock, DiagramConnection } from '../types.js';
+import type { DiagramHistoryEntry, DiagramSnapshot } from '../types.js';
+
 type UndoRedoResult =
     | { status: 'ok'; version: number; state: DiagramSnapshot }
     | { status: 'not_found' }
@@ -79,6 +77,28 @@ export class DiagramHistoryService {
                 'DELETE FROM diagram_history WHERE diagram_id = $1 AND version > $2',
                 [diagramId, diagramRow.current_version ?? 0]
             );
+
+            // ОГРАНИЧЕНИЕ: Удаляем старые снапшоты, если их больше 50
+            const maxSnapshots = 50;
+            const countRes = await client.query(
+                'SELECT COUNT(*) as count FROM diagram_history WHERE diagram_id = $1',
+                [diagramId]
+            );
+            const snapshotCount = parseInt(countRes.rows[0].count);
+
+            if (snapshotCount >= maxSnapshots) {
+                // Удаляем самые старые снапшоты, оставляя maxSnapshots-1
+                await client.query(
+                    `DELETE FROM diagram_history 
+                 WHERE diagram_id = $1 AND version IN (
+                     SELECT version FROM diagram_history 
+                     WHERE diagram_id = $1 
+                     ORDER BY version ASC 
+                     LIMIT $2
+                 )`,
+                    [diagramId, snapshotCount - maxSnapshots + 1]
+                );
+            }
 
             const snapshot = await this.buildSnapshot(client, diagramRow);
             const nextVersion = (diagramRow.current_version ?? 0) + 1;
@@ -227,7 +247,7 @@ export class DiagramHistoryService {
                     block.y,
                     block.width,
                     block.height,
-                    block.properties,
+                    JSON.stringify(block.properties), // ПРАВИЛЬНАЯ сериализация
                     block.created_at,
                     block.updated_at,
                 ]
@@ -235,6 +255,24 @@ export class DiagramHistoryService {
         }
 
         for (const connection of snapshot.connections) {
+            // Подготовка points
+            let pointsJson = '[]';
+
+            if (connection.points) {
+                if (typeof connection.points === 'string') {
+                    // Проверяем валидность JSON строки
+                    try {
+                        JSON.parse(connection.points);
+                        pointsJson = connection.points;
+                    } catch {
+                        pointsJson = '[]';
+                    }
+                } else if (Array.isArray(connection.points)) {
+                    // Сериализуем массив в JSON
+                    pointsJson = JSON.stringify(connection.points);
+                }
+            }
+
             await client.query(
                 `INSERT INTO diagram_connections (id, diagram_id, from_block_id, to_block_id, type, points, label, created_at)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -244,8 +282,8 @@ export class DiagramHistoryService {
                     connection.from_block_id,
                     connection.to_block_id,
                     connection.type,
-                    connection.points ?? [],
-                    connection.label,
+                    pointsJson,
+                    connection.label || null,
                     connection.created_at,
                 ]
             );

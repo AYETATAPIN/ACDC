@@ -116,58 +116,77 @@ export const validateBlockUpdate = (body: any): { ok: true; data: DiagramBlockUp
 };
 
 export const validateConnectionCreate = (body: any): { ok: true; data: DiagramConnectionCreateInput } | { ok: false; error: string } => {
-  if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
-  const { diagram_id, from_block_id, to_block_id, type, points, label } = body;
-  
-  if (typeof diagram_id !== 'string' || !diagram_id.trim()) return { ok: false, error: 'diagram_id is required' };
-  if (typeof from_block_id !== 'string' || !from_block_id.trim()) return { ok: false, error: 'from_block_id is required' };
-  if (typeof to_block_id !== 'string' || !to_block_id.trim()) return { ok: false, error: 'to_block_id is required' };
-  if (typeof type !== 'string' || !type.trim()) return { ok: false, error: 'type is required' };
-  
-  const data: DiagramConnectionCreateInput = {
-    diagram_id: diagram_id.trim(),
-    from_block_id: from_block_id.trim(),
-    to_block_id: to_block_id.trim(),
-    type: type.trim(),
-  };
-  
-  if (points !== undefined) {
-    if (!Array.isArray(points)) return { ok: false, error: 'points must be an array' };
-    data.points = points;
-  }
-  
-  if (label !== undefined) {
-    if (typeof label !== 'string') return { ok: false, error: 'label must be a string' };
-    data.label = label;
-  }
-  
-  return { ok: true, data };
+    if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
+    const { diagram_id, from_block_id, to_block_id, type, points, label } = body;
+
+    if (typeof diagram_id !== 'string' || !diagram_id.trim()) return { ok: false, error: 'diagram_id is required' };
+    if (typeof from_block_id !== 'string' || !from_block_id.trim()) return { ok: false, error: 'from_block_id is required' };
+    if (typeof to_block_id !== 'string' || !to_block_id.trim()) return { ok: false, error: 'to_block_id is required' };
+    if (typeof type !== 'string' || !type.trim()) return { ok: false, error: 'type is required' };
+
+    const data: DiagramConnectionCreateInput = {
+        diagram_id: diagram_id.trim(),
+        from_block_id: from_block_id.trim(),
+        to_block_id: to_block_id.trim(),
+        type: type.trim(),
+    };
+
+    if (points !== undefined) {
+        if (!Array.isArray(points)) return { ok: false, error: 'points must be an array' };
+
+        // Проверяем что каждый элемент массива имеет x и y как числа
+        for (const point of points) {
+            if (typeof point !== 'object' || point === null) {
+                return { ok: false, error: 'each point must be an object' };
+            }
+            if (typeof point.x !== 'number') {
+                return { ok: false, error: 'point.x must be a number' };
+            }
+            if (typeof point.y !== 'number') {
+                return { ok: false, error: 'point.y must be a number' };
+            }
+        }
+        data.points = points;
+    }
+
+    if (label !== undefined) {
+        if (typeof label !== 'string') return { ok: false, error: 'label must be a string' };
+        data.label = label;
+    }
+
+    return { ok: true, data };
 };
 
 
 export const validateConnectionUpdate = (body: any): { ok: true; data: DiagramConnectionUpdateInput } | { ok: false; error: string } => {
-  if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
-  const { label, points } = body;
-  const out: DiagramConnectionUpdateInput = {};
-  
-  if (label !== undefined) {
-    if (typeof label !== 'string') return { ok: false, error: 'label must be a string' };
-    out.label = label;
-  }
-  
-  if (points !== undefined) {
-    if (!Array.isArray(points)) return { ok: false, error: 'points must be an array' };
-    // Проверим что каждая точка имеет x и y
-    for (const point of points) {
-      if (typeof point.x !== 'number' || typeof point.y !== 'number') {
-        return { ok: false, error: 'each point must have x and y as numbers' };
-      }
+    if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
+    const { label, points } = body;
+    const out: DiagramConnectionUpdateInput = {};
+
+    if (label !== undefined) {
+        if (typeof label !== 'string') return { ok: false, error: 'label must be a string' };
+        out.label = label;
     }
-    out.points = points;
-  }
-  
-  if (Object.keys(out).length === 0) return { ok: false, error: 'At least one field must be provided' };
-  return { ok: true, data: out };
+
+    if (points !== undefined) {
+        if (!Array.isArray(points)) return { ok: false, error: 'points must be an array' };
+
+        for (const point of points) {
+            if (typeof point !== 'object' || point === null) {
+                return { ok: false, error: 'each point must be an object' };
+            }
+            if (typeof point.x !== 'number') {
+                return { ok: false, error: 'point.x must be a number' };
+            }
+            if (typeof point.y !== 'number') {
+                return { ok: false, error: 'point.y must be a number' };
+            }
+        }
+        out.points = points;
+    }
+
+    if (Object.keys(out).length === 0) return { ok: false, error: 'At least one field must be provided' };
+    return { ok: true, data: out };
 };
 
 export const validateBendPointCreate = (body: any): { ok: true; data: BendPointCreateInput } | { ok: false; error: string } => {

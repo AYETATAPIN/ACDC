@@ -16,6 +16,13 @@
         >
           {{ snapToGrid ? '📐 Сетка: ВКЛ' : '📏 Сетка: ВЫКЛ' }}
         </button>
+        <button
+            @click="selectTool(null)"
+            :class="{ active: currentTool === null }"
+            title="Режим выбора и перемещения"
+        >
+          👆 Select
+        </button>
         <button @click="saveDiagram" :class="{ 'has-changes': hasUnsavedChanges }">
           {{ hasUnsavedChanges ? '💾 Save*' : '💾 Save' }}
         </button>
@@ -133,21 +140,49 @@
       >
         <div class="canvas-inner" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, width: (100/zoom)+'%', height: (100/zoom)+'%', transformOrigin: '0 0' }">
           <svg
-              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
               xmlns="http://www.w3.org/2000/svg"
           >
-            <line
+            <path
                 v-for="conn in connections"
                 :key="conn.id"
-                :x1="conn.points?.[0]?.x || 0"
-                :y1="conn.points?.[0]?.y || 0"
-                :x2="conn.points?.[1]?.x || 0"
-                :y2="conn.points?.[1]?.y || 0"
-                :stroke="getConnectionColor(conn.type)"
-                stroke-width="3"
+                :d="getConnectionPath(conn)"
+                :stroke="selectedConnection?.id === conn.id ? '#e74c3c' : getConnectionColor(conn.type)"
+                :stroke-width="selectedConnection?.id === conn.id ? 5 : 3"
                 :stroke-dasharray="getConnectionDash(conn.type) || null"
                 :marker-end="`url(#${getMarkerId(conn.type)})`"
+                fill="none"
+                style="pointer-events: stroke;"
+                @click.stop="handleConnectionClick(conn)"
             />
+
+            <!-- Bend points (draggable middle points) -->
+            <g v-for="conn in connections" :key="`bend-${conn.id}`">
+              <template v-for="(pt, idx) in (conn.points || [])" :key="`pt-${conn.id}-${idx}`">
+                <circle
+                    v-if="idx > 0 && idx < (conn.points.length - 1)"
+                    class="bend-point"
+                    :cx="pt.x"
+                    :cy="pt.y"
+                    :r="(draggingBendPoint.connId === conn.id && draggingBendPoint.pointIndex === idx) ? 8 : 6"
+                    :fill="(draggingBendPoint.connId === conn.id && draggingBendPoint.pointIndex === idx) ? '#c0392b' : '#e74c3c'"
+                    stroke="#ffffff"
+                    stroke-width="2"
+                    style="pointer-events: all; cursor: move;"
+                    @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)"
+                />
+                <!-- Larger invisible hit area -->
+                <circle
+                    v-if="idx > 0 && idx < (conn.points.length - 1)"
+                    :cx="pt.x"
+                    :cy="pt.y"
+                    r="14"
+                    fill="transparent"
+                    style="pointer-events: all; cursor: move;"
+                    @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)"
+                />
+              </template>
+            </g>
 
             <defs>
               <marker
@@ -180,6 +215,33 @@
               </marker>
             </defs>
           </svg>
+
+          <!-- Connection labels (double click to edit) -->
+          <div class="labels-layer">
+            <div
+                v-for="conn in connections"
+                :key="`lbl-${conn.id}`"
+                v-if="(conn.label && conn.label.trim().length > 0) || selectedConnection?.id === conn.id || editingLabel?.connId === conn.id"
+                class="connection-label"
+                :style="getLabelStyle(conn)"
+                @click.stop="handleConnectionClick(conn)"
+                @dblclick.stop="startEditConnectionLabel(conn)"
+            >
+              <template v-if="editingLabel?.connId === conn.id">
+                <input
+                    ref="labelInput"
+                    v-model="editingLabel.value"
+                    class="label-input"
+                    @blur="saveConnectionLabel(conn)"
+                    @keydown.enter.prevent="saveConnectionLabel(conn)"
+                    @keydown.esc.prevent="cancelEditConnectionLabel"
+                />
+              </template>
+              <template v-else>
+                {{ (conn.label && conn.label.trim().length > 0) ? conn.label : 'Double click' }}
+              </template>
+            </div>
+          </div>
 
           <div
               v-if="isConnecting && connectionStart"
@@ -275,6 +337,8 @@ export default {
       elements: [],
       connections: [],
       selectedElement: null,
+      selectedConnection: null,
+      editingLabel: null,
       zoom: 1,
       currentDiagramId: null,
       diagrams: [],
@@ -297,7 +361,11 @@ export default {
       pan: { x: 0, y: 0 },
       isPanning: false,
       panStart: { x: 0, y: 0 },
-      pointerStart: { x: 0, y: 0 }
+      pointerStart: { x: 0, y: 0 },
+
+      // Bend point drag
+      draggingBendPoint: { connId: null, pointIndex: null },
+      bendPointDragOffset: { x: 0, y: 0 }
     }
   },
   mounted() {
@@ -517,6 +585,10 @@ export default {
         this.isPanning = false;
       }
 
+      if (this.draggingBendPoint.connId) {
+        this.draggingBendPoint = { connId: null, pointIndex: null };
+      }
+
       // НЕ отменяем режим соединения при глобальном mouseup,
       // так как пользователь может кликать на элементы для создания связи
       // Режим соединения отменяется только:
@@ -534,7 +606,14 @@ export default {
 
       if (this.isPanning) return;
       if (!this.currentTool) {
-        console.log('No tool selected');
+        // Select/move mode: clicking empty space clears selection
+        const {x, y} = this.getCanvasCoords(event);
+        const clickedElement = this.getElementAtPosition(x, y);
+        if (!clickedElement) {
+          this.selectedElement = null;
+          this.selectedConnection = null;
+          this.editingLabel = null;
+        }
         return;
       }
 
@@ -662,6 +741,20 @@ export default {
     },
 
     handleMouseMove(event) {
+      // Drag bend point
+      if (this.draggingBendPoint.connId && this.draggingBendPoint.pointIndex !== null) {
+        const conn = this.connections.find(c => c.id === this.draggingBendPoint.connId);
+        if (!conn || !Array.isArray(conn.points)) return;
+
+        const { x, y } = this.getCanvasCoords(event);
+        const raw = { x: x - this.bendPointDragOffset.x, y: y - this.bendPointDragOffset.y };
+        const snapped = this.snapToGrid ? this.snapCoordinates(raw.x, raw.y) : raw;
+
+        // update in-place to keep reactivity
+        conn.points.splice(this.draggingBendPoint.pointIndex, 1, snapped);
+        return;
+      }
+
       if (this.resizingElement) {
         const {x, y} = this.getCanvasCoords(event);
         const deltaX = x - this.resizeStart.x;
@@ -713,14 +806,26 @@ export default {
       this.connections = this.connections.map(conn => {
         const fromElement = this.elements.find(el => el.id === conn.from);
         const toElement = this.elements.find(el => el.id === conn.to);
+        if (!fromElement || !toElement) return conn;
 
-        if (fromElement && toElement) {
-          return {
-            ...conn,
-            points: this.calculateConnectionPoints(fromElement, toElement)
-          };
+        const start = this.getAnchorPoint(fromElement, toElement);
+        const end = this.getAnchorPoint(toElement, fromElement);
+
+        let points = Array.isArray(conn.points) ? conn.points.slice() : [];
+        if (points.length < 2) {
+          points = [start, this.getDefaultMidpoint(start, end), end];
+        } else {
+          // update endpoints only, keep middle points as user-defined bend points
+          points[0] = start;
+          points[points.length - 1] = end;
+
+          // if a connection somehow has only 2 points, insert a midpoint so we have a bend handle
+          if (points.length === 2) {
+            points.splice(1, 0, this.getDefaultMidpoint(start, end));
+          }
         }
-        return conn;
+
+        return { ...conn, points };
       });
     },
 
@@ -833,6 +938,12 @@ export default {
       this.connections.push(connection);
 
       console.log('Total connections:', this.connections.length);
+
+      // Safe mode after creating connection
+      this.selectedConnection = connection;
+      this.selectedElement = null;
+      this.editingLabel = null;
+      this.selectTool(null);
     },
 
     async saveDiagram() {
@@ -1134,6 +1245,8 @@ export default {
       }
 
       this.selectedElement = element;
+      this.selectedConnection = null;
+      this.editingLabel = null;
     },
 
     handleResizeMouseDown(element, event) {
@@ -1148,11 +1261,95 @@ export default {
     },
 
     getCanvasCoords(event) {
-      const canvasRect = event.currentTarget.getBoundingClientRect();
+      const canvasEl = this.$el.querySelector('.canvas');
+      const canvasRect = (canvasEl || event.currentTarget).getBoundingClientRect();
       return {
         x: (event.clientX - canvasRect.left - this.pan.x) / this.zoom,
         y: (event.clientY - canvasRect.top - this.pan.y) / this.zoom
       };
+    },
+
+    handleBendPointMouseDown(conn, pointIndex, event) {
+      if (!conn || !Array.isArray(conn.points)) return;
+      const pt = conn.points[pointIndex];
+      if (!pt) return;
+
+      this.draggingBendPoint = { connId: conn.id, pointIndex };
+
+      const { x, y } = this.getCanvasCoords(event);
+      this.bendPointDragOffset = { x: x - pt.x, y: y - pt.y };
+
+      // stop element dragging if any
+      this.isDragging = false;
+      this.dragElement = null;
+    },
+
+    handleConnectionClick(conn) {
+      this.selectedConnection = conn;
+      this.selectedElement = null;
+      this.editingLabel = null;
+      // Safe default: switch to select mode when user interacts with a connection
+      this.selectTool(null);
+    },
+
+    getLabelPoint(conn) {
+      const pts = Array.isArray(conn?.points) ? conn.points : [];
+      if (pts.length === 0) return { x: 0, y: 0 };
+      if (pts.length === 1) return pts[0];
+      const mid = (pts.length - 1) / 2;
+      if (Number.isInteger(mid)) return pts[mid];
+      const a = pts[Math.floor(mid)];
+      const b = pts[Math.ceil(mid)];
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    },
+
+    getLabelStyle(conn) {
+      const p = this.getLabelPoint(conn);
+      const inv = this.zoom ? 1 / this.zoom : 1;
+      return {
+        left: `${p.x}px`,
+        top: `${p.y - 14}px`,
+        transform: `translate(-50%, -50%) scale(${inv})`,
+        transformOrigin: '0 0'
+      };
+    },
+
+    startEditConnectionLabel(conn) {
+      this.handleConnectionClick(conn);
+      this.editingLabel = { connId: conn.id, value: conn.label || '' };
+      this.$nextTick(() => {
+        const ref = this.$refs.labelInput;
+        const input = Array.isArray(ref) ? ref.find(Boolean) : ref;
+        if (input && input.focus) {
+          input.focus();
+          input.select?.();
+        }
+      });
+    },
+
+    saveConnectionLabel(conn) {
+      if (!this.editingLabel || this.editingLabel.connId !== conn.id) return;
+      conn.label = (this.editingLabel.value || '').trim();
+      this.editingLabel = null;
+      this.selectTool(null);
+    },
+
+    cancelEditConnectionLabel() {
+      this.editingLabel = null;
+    },
+
+    getDefaultMidpoint(a, b) {
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    },
+
+    getConnectionPath(conn) {
+      const pts = Array.isArray(conn?.points) ? conn.points : [];
+      if (pts.length === 0) return 'M 0 0';
+      let d = `M ${pts[0].x} ${pts[0].y}`;
+      for (let i = 1; i < pts.length; i++) {
+        d += ` L ${pts[i].x} ${pts[i].y}`;
+      }
+      return d;
     },
 
 
@@ -1179,6 +1376,11 @@ export default {
       console.log('New element:', element);
       this.elements.push(element);
       this.selectedElement = element;
+
+      // Safe mode after creating element
+      this.selectedConnection = null;
+      this.editingLabel = null;
+      this.selectTool(null);
     },
 
     generateUUID() {
@@ -1210,7 +1412,8 @@ export default {
     calculateConnectionPoints(fromElement, toElement) {
       const start = this.getAnchorPoint(fromElement, toElement);
       const end = this.getAnchorPoint(toElement, fromElement);
-      return [start, end];
+      // default with one bend handle in the middle
+      return [start, this.getDefaultMidpoint(start, end), end];
     },
 
     getAnchorPoint(element, target) {
@@ -1321,6 +1524,11 @@ export default {
   transition: background 0.2s;
 }
 
+.controls button.active {
+  background: #2d83be;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+}
+
 .controls .diagram-select {
   min-width: 140px;
   padding: 0.25rem 0.4rem;
@@ -1391,7 +1599,9 @@ export default {
 }
 
 .toolbar {
-  width: 130px;
+  width: 280px;
+  min-width: 260px;
+  flex: 0 0 280px;
   background: #f4f6f8;
   padding: 0.75rem;
   border-right: 1px solid #e5e7eb;
@@ -1399,7 +1609,7 @@ export default {
   flex-direction: column;
   gap: 1rem;
   overflow-y: auto;
-  max-height: calc(100vh - 120px);
+  height: 100%;
   position: relative;
   z-index: 5;
 }
@@ -1539,6 +1749,40 @@ export default {
 .debug-badge.ok {
   background: #e9f7ef;
   color: #27ae60;
+}
+
+.labels-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.connection-label {
+  position: absolute;
+  pointer-events: all;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #3498db;
+  color: #2c3e50;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  min-width: 80px;
+  text-align: center;
+  user-select: none;
+}
+
+.label-input {
+  width: 100%;
+  border: 1px solid #3498db;
+  border-radius: 4px;
+  padding: 2px 4px;
+  font-size: 12px;
+  outline: none;
+  box-sizing: border-box;
 }
 
 .element {

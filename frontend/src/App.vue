@@ -1,10 +1,7 @@
 <template>
   <div class="app">
     <header class="header">
-      <div>
-        <h1>ACDC Diagram Editor</h1>
-        <p class="subtitle">Сохранение + undo/redo на бекенде</p>
-      </div>
+      <div class="logo-placeholder"></div>
       <div class="controls">
         <input v-model="diagramName" placeholder="Diagram name">
         <select v-model="diagramType">
@@ -32,9 +29,11 @@
           </option>
         </select>
         <button @click="loadDiagramsList" :disabled="isLoadingList">↻</button>
-      </div>
-      <div class="debug-info" style="color: white; font-size: 12px;">
-        Текущий инструмент: {{ currentTool }} | Элементов: {{ elements.length }}
+        <div class="canvas-size-controls">
+          <button type="button" @click="adjustZoom(-0.1)">−</button>
+          <div style="min-width:60px;text-align:center;">{{ Math.round(zoom * 100) }}%</div>
+          <button type="button" @click="adjustZoom(0.1)">+</button>
+        </div>
       </div>
     </header>
 
@@ -122,108 +121,122 @@
          background: snapToGrid
              ? 'linear-gradient(90deg, #f0f0f0 1px, transparent 1px), linear-gradient(#f0f0f0 1px, transparent 1px)'
              : 'white',
-         backgroundSize: snapToGrid ? `${gridSize}px ${gridSize}px` : 'auto'
+         backgroundSize: snapToGrid ? `${gridSize}px ${gridSize}px` : 'auto',
+         height: canvasHeight + 'px'
      }"
            @click="handleCanvasClick"
            @mousedown="handleMouseDown"
            @mousemove="handleMouseMove"
            @mouseup="handleMouseUp"
            @mouseleave="handleMouseUp"
+           @wheel.prevent="handleWheel"
       >
-        <svg
-            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"
-            xmlns="http://www.w3.org/2000/svg"
-        >
-          <line
-              v-for="conn in connections"
-              :key="conn.id"
-              :x1="conn.points?.[0]?.x || 0"
-              :y1="conn.points?.[0]?.y || 0"
-              :x2="conn.points?.[1]?.x || 0"
-              :y2="conn.points?.[1]?.y || 0"
-              :stroke="getConnectionColor(conn.type)"
-              stroke-width="3"
-              :stroke-dasharray="getConnectionDash(conn.type) || null"
-              :marker-end="`url(#${getMarkerId(conn.type)})`"
-          />
+        <div class="canvas-inner" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, width: (100/zoom)+'%', height: (100/zoom)+'%', transformOrigin: '0 0' }">
+          <svg
+              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"
+              xmlns="http://www.w3.org/2000/svg"
+          >
+            <line
+                v-for="conn in connections"
+                :key="conn.id"
+                :x1="conn.points?.[0]?.x || 0"
+                :y1="conn.points?.[0]?.y || 0"
+                :x2="conn.points?.[1]?.x || 0"
+                :y2="conn.points?.[1]?.y || 0"
+                :stroke="getConnectionColor(conn.type)"
+                stroke-width="3"
+                :stroke-dasharray="getConnectionDash(conn.type) || null"
+                :marker-end="`url(#${getMarkerId(conn.type)})`"
+            />
 
-          <defs>
-            <marker
-                v-for="preset in connectionPresets"
-                :key="preset.type"
-                :id="`arrow-${preset.type}`"
-                markerWidth="10"
-                markerHeight="7"
-                refX="9"
-                refY="3.5"
-                orient="auto"
-            >
-              <polygon
-                  points="0 0, 10 3.5, 0 7"
-                  :fill="getConnectionColor(preset.type)"
-              />
-            </marker>
-            <marker
-                id="arrow-default"
-                markerWidth="10"
-                markerHeight="7"
-                refX="9"
-                refY="3.5"
-                orient="auto"
-            >
-              <polygon
-                  points="0 0, 10 3.5, 0 7"
-                  :fill="getConnectionColor('association')"
-              />
-            </marker>
-          </defs>
-        </svg>
+            <defs>
+              <marker
+                  v-for="preset in connectionPresets"
+                  :key="preset.type"
+                  :id="`arrow-${preset.type}`"
+                  markerWidth="10"
+                  markerHeight="7"
+                  refX="9"
+                  refY="3.5"
+                  orient="auto"
+              >
+                <polygon
+                    points="0 0, 10 3.5, 0 7"
+                    :fill="getConnectionColor(preset.type)"
+                />
+              </marker>
+              <marker
+                  id="arrow-default"
+                  markerWidth="10"
+                  markerHeight="7"
+                  refX="9"
+                  refY="3.5"
+                  orient="auto"
+              >
+                <polygon
+                    points="0 0, 10 3.5, 0 7"
+                    :fill="getConnectionColor('association')"
+                />
+              </marker>
+            </defs>
+          </svg>
 
-        <div
-            v-if="isConnecting && connectionStart"
-            style="position: absolute; pointer-events: none; z-index: 1000;"
-            :style="{
+          <div
+              v-if="isConnecting && connectionStart"
+              style="position: absolute; pointer-events: none; z-index: 1000;"
+              :style="{
       left: (connectionStart.x + connectionStart.width/2) + 'px',
       top: (connectionStart.y + connectionStart.height/2) + 'px'
     }"
-        >
-          <div style="color: #e74c3c; font-weight: bold; background: white; padding: 5px; border-radius: 4px;">
-            Выберите второй элемент
+          >
+            <div style="color: #e74c3c; font-weight: bold; background: white; padding: 5px; border-radius: 4px;">
+              Выберите второй элемент
+            </div>
           </div>
-        </div>
 
-        <div style="padding: 20px; color: #666; text-align: center;" v-if="elements.length === 0">
-          <p>Выберите инструмент слева и кликните здесь</p>
-          <p>Текущий инструмент: <strong>{{ currentTool }}</strong></p>
-        </div>
+          <div style="padding: 20px; color: #666; text-align: center;" v-if="elements.length === 0">
+            <p>Выберите инструмент слева и кликните здесь</p>
+            <p>Текущий инструмент: <strong>{{ currentTool }}</strong></p>
+          </div>
 
-        <div
-            v-for="element in elements"
-            :key="element.id"
-            class="element"
-            :class="[{ dragging: dragElement?.id === element.id, selected: selectedElement?.id === element.id }, `shape-${getElementShape(element.type)}`]"
-            :style="getElementStyle(element)"
-            @click.stop="handleElementClick(element)"
-        >
-          <div class="element-text-main">{{ element.text }}</div>
-          <div class="element-type-tag">{{ element.type }}</div>
+          <div
+              v-for="element in elements"
+              :key="element.id"
+              class="element"
+              :class="[{ dragging: dragElement?.id === element.id, selected: selectedElement?.id === element.id }, `shape-${getElementShape(element.type)}`]"
+              :style="getElementStyle(element)"
+              @click.stop="handleElementClick(element)"
+          >
+            <div class="element-text-main">{{ element.text }}</div>
+            <div class="element-type-tag">{{ element.type }}</div>
+            <div
+                class="resize-handle"
+                @mousedown.stop="handleResizeMouseDown(element, $event)"
+                title="Изменить размер"
+            ></div>
+          </div>
         </div>
       </div>
 
-      <aside class="history-panel" v-if="currentDiagramId">
-        <h3>History</h3>
-        <div v-if="historyEntries.length === 0" class="empty">No snapshots yet</div>
-        <div
-            v-for="entry in historyEntries"
-            :key="entry.version"
-            class="history-row"
-            :class="{ active: entry.version === currentVersion }"
-        >
-          <div class="version">v{{ entry.version }}</div>
-          <div class="version-info" v-if="currentDiagramId">
-            Версия: {{ currentVersion }} | Снапшотов: {{ historyEntries.length }}
+      <aside class="history-panel" v-if="currentDiagramId" :class="{ collapsed: historyCollapsed }">
+        <div class="history-header" @click="historyCollapsed = !historyCollapsed">
+          <h3>History</h3>
+          <button class="collapse-btn">{{ historyCollapsed ? '▼' : '▲' }}</button>
+        </div>
+        <div v-if="!historyCollapsed">
+          <div v-if="historyEntries.length === 0" class="empty">No snapshots yet</div>
+          <div
+              v-for="entry in historyEntries"
+              :key="entry.version"
+              class="history-row"
+              :class="{ active: entry.version === currentVersion }"
+          >
+            <div class="version">v{{ entry.version }}</div>
+            <div class="version-info" v-if="currentDiagramId">
+              Версия: {{ currentVersion }} | Снапшотов: {{ historyEntries.length }}
+            </div>
+            <div class="time">{{ formatDate(entry.created_at) }}</div>
           </div>
-          <div class="time">{{ formatDate(entry.created_at) }}</div>
         </div>
       </aside>
     </div>
@@ -267,6 +280,7 @@ export default {
       diagrams: [],
       historyEntries: [],
       currentVersion: 0,
+      historyCollapsed: false,
       connectionStart: null,
       isConnecting: false,
       tempConnection: null,
@@ -276,7 +290,14 @@ export default {
       errorMessage: null,
       isLoading: false,
       isLoadingList: false,
-      selectedDiagramId: null
+      selectedDiagramId: null,
+      resizingElement: null,
+      resizeStart: { x: 0, y: 0, width: 0, height: 0 },
+      canvasHeight: 1000,
+      pan: { x: 0, y: 0 },
+      isPanning: false,
+      panStart: { x: 0, y: 0 },
+      pointerStart: { x: 0, y: 0 }
     }
   },
   mounted() {
@@ -368,6 +389,26 @@ export default {
       const fallback = this.availableElementTools[0]?.type;
       if (this.diagramType === 'use_case') return this.availableElementTools.find(t => t.type === 'actor')?.type || fallback || null;
       return fallback || null;
+    },
+
+    adjustCanvasHeight(delta) {
+      const next = Number(this.canvasHeight || 0) + delta;
+      this.canvasHeight = Math.max(400, next);
+    },
+
+    setZoom(value) {
+      const clamped = Math.min(3, Math.max(0.3, value));
+      this.zoom = Number(clamped.toFixed(2));
+    },
+
+    adjustZoom(delta) {
+      this.setZoom(this.zoom + delta);
+    },
+
+    handleWheel(event) {
+      const step = 0.1;
+      const delta = event.deltaY > 0 ? -step : step; // wheel down -> уменьшить масштаб
+      this.adjustZoom(delta);
     },
 
     getElementPreset(type) {
@@ -472,6 +513,10 @@ export default {
         this.dragElement = null;
       }
 
+      if (this.isPanning) {
+        this.isPanning = false;
+      }
+
       // НЕ отменяем режим соединения при глобальном mouseup,
       // так как пользователь может кликать на элементы для создания связи
       // Режим соединения отменяется только:
@@ -487,14 +532,13 @@ export default {
       console.log('Canvas clicked!', event);
       console.log('Current tool:', this.currentTool);
 
+      if (this.isPanning) return;
       if (!this.currentTool) {
         console.log('No tool selected');
         return;
       }
 
-      const rect = event.currentTarget.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
+      const {x, y} = this.getCanvasCoords(event);
 
       console.log('Click coordinates:', x, y);
 
@@ -592,9 +636,15 @@ export default {
     },
 
     handleMouseDown(event) {
-      const rect = event.currentTarget.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
+      // Middle button или Alt+ЛКМ — панорамирование холста
+      if (event.button === 1 || event.altKey) {
+        this.isPanning = true;
+        this.panStart = {...this.pan};
+        this.pointerStart = { x: event.clientX, y: event.clientY };
+        return;
+      }
+
+      const {x, y} = this.getCanvasCoords(event);
 
       const element = this.getElementAtPosition(x, y);
 
@@ -612,11 +662,34 @@ export default {
     },
 
     handleMouseMove(event) {
+      if (this.resizingElement) {
+        const {x, y} = this.getCanvasCoords(event);
+        const deltaX = x - this.resizeStart.x;
+        const deltaY = y - this.resizeStart.y;
+
+        const newWidth = Math.max(40, this.resizeStart.width + deltaX);
+        const newHeight = Math.max(30, this.resizeStart.height + deltaY);
+
+        const snappedW = this.snapToGrid ? Math.round(newWidth / this.gridSize) * this.gridSize : newWidth;
+        const snappedH = this.snapToGrid ? Math.round(newHeight / this.gridSize) * this.gridSize : newHeight;
+
+        this.resizingElement.width = snappedW;
+        this.resizingElement.height = snappedH;
+        this.updateConnections();
+        return;
+      }
+
+      if (this.isPanning) {
+        const dx = event.clientX - this.pointerStart.x;
+        const dy = event.clientY - this.pointerStart.y;
+        this.pan.x = this.panStart.x + dx;
+        this.pan.y = this.panStart.y + dy;
+        return;
+      }
+
       if (!this.isDragging || !this.dragElement) return;
 
-      const rect = event.currentTarget.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
+      const {x, y} = this.getCanvasCoords(event);
 
       const newX = x - this.dragOffset.x;
       const newY = y - this.dragOffset.y;
@@ -628,6 +701,12 @@ export default {
 
     handleMouseUp() {
       this.handleGlobalMouseUp(); // Используем общий метод
+      if (this.resizingElement) {
+        this.resizingElement = null;
+      }
+      if (this.isPanning) {
+        this.isPanning = false;
+      }
     },
 
     updateConnections() {
@@ -842,6 +921,7 @@ export default {
       this.selectedDiagramId = null
       this.historyEntries = []
       this.currentVersion = 0
+      this.pan = {x: 0, y: 0}
     },
 
     async loadHistory() {
@@ -1056,6 +1136,25 @@ export default {
       this.selectedElement = element;
     },
 
+    handleResizeMouseDown(element, event) {
+      this.resizingElement = element;
+      const canvasRect = this.$el.querySelector('.canvas').getBoundingClientRect();
+      this.resizeStart = {
+        x: (event.clientX - canvasRect.left) / this.zoom,
+        y: (event.clientY - canvasRect.top) / this.zoom,
+        width: element.width,
+        height: element.height
+      };
+    },
+
+    getCanvasCoords(event) {
+      const canvasRect = event.currentTarget.getBoundingClientRect();
+      return {
+        x: (event.clientX - canvasRect.left - this.pan.x) / this.zoom,
+        y: (event.clientY - canvasRect.top - this.pan.y) / this.zoom
+      };
+    },
+
 
     createElement(type, x, y) {
       console.log('Creating element:', type, 'at', x, y);
@@ -1169,11 +1268,13 @@ export default {
 .header {
   background: #2c3e50;
   color: white;
-  padding: 1rem;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  grid-column-gap: 1rem;
+  padding: 1.25rem 1rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
   align-items: center;
+  position: relative;
+  z-index: 10;
 }
 
 .subtitle {
@@ -1182,11 +1283,21 @@ export default {
   font-size: 0.9rem;
 }
 
+.logo-placeholder {
+  min-height: 1px;
+}
+
 .controls {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, auto));
+  grid-auto-flow: column;
+  grid-auto-columns: min-content;
   gap: 0.5rem;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: start;
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
 }
 
 .controls input,
@@ -1194,12 +1305,16 @@ export default {
   padding: 0.4rem 0.6rem;
   border-radius: 6px;
   border: 1px solid #d0d7de;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .controls button {
-  padding: 0.5rem 0.75rem;
+  padding: 0.25rem 0.35rem;
+  min-height: 28px;
+  min-width: 32px;
   border: none;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
   background: #3498db;
   color: white;
@@ -1207,10 +1322,41 @@ export default {
 }
 
 .controls .diagram-select {
-  min-width: 180px;
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
+  min-width: 140px;
+  padding: 0.25rem 0.4rem;
+  min-height: 28px;
+  border-radius: 5px;
   border: 1px solid #d0d7de;
+  font-size: 0.9rem;
+}
+
+.controls .canvas-size {
+  width: 100%;
+}
+
+.canvas-size-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.canvas-size-controls button {
+  padding: 0.25rem 0.35rem;
+  min-width: 24px;
+  min-height: 28px;
+  background: #ecf0f1;
+  color: #2c3e50;
+}
+
+.canvas-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .controls button:hover {
@@ -1241,16 +1387,21 @@ export default {
   display: flex;
   flex: 1;
   overflow: hidden;
+  position: relative;
 }
 
 .toolbar {
-  width: 260px;
+  width: 130px;
   background: #f4f6f8;
-  padding: 1rem;
+  padding: 0.75rem;
   border-right: 1px solid #e5e7eb;
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  overflow-y: auto;
+  max-height: calc(100vh - 120px);
+  position: relative;
+  z-index: 5;
 }
 
 .toolbar-section h3 {
@@ -1266,22 +1417,22 @@ export default {
 
 .tool-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  gap: 0.45rem;
 }
 
 .tool-btn {
   width: 100%;
-  padding: 0.65rem;
+  padding: 0.5rem;
   border: 1px solid #d0d7de;
-  border-radius: 8px;
+  border-radius: 6px;
   background: white;
   cursor: pointer;
   transition: all 0.15s ease;
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: 0.1rem;
 }
 
 .tool-btn:hover {
@@ -1412,12 +1563,44 @@ export default {
   box-shadow: 0 6px 12px rgba(0,0,0,0.18);
 }
 
+.resize-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  right: -2px;
+  bottom: -2px;
+  background: #e74c3c;
+  border-radius: 4px;
+  cursor: se-resize;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+
 .history-panel {
   width: 240px;
   border-left: 1px solid #e5e7eb;
   padding: 1rem;
   background: #fafafa;
   overflow-y: auto;
+}
+
+.history-panel.collapsed {
+  width: 80px;
+  padding: 0.75rem;
+}
+
+.history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.collapse-btn {
+  border: 1px solid #d0d7de;
+  background: white;
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
 }
 
 .history-panel h3 {
@@ -1493,8 +1676,10 @@ export default {
   background: white;
   position: relative;
   cursor: crosshair;
-  min-height: 520px;
+  min-height: 720px;
   user-select: none;
+  overflow: hidden;
+  z-index: 1;
 }
 
 .error-toast {

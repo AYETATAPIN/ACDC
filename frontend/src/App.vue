@@ -16,13 +16,6 @@
         >
           {{ snapToGrid ? '📐 Сетка: ВКЛ' : '📏 Сетка: ВЫКЛ' }}
         </button>
-        <button
-            @click="selectTool(null)"
-            :class="{ active: currentTool === null }"
-            title="Режим выбора и перемещения"
-        >
-          👆 Select
-        </button>
         <button @click="saveDiagram" :class="{ 'has-changes': hasUnsavedChanges }">
           {{ hasUnsavedChanges ? '💾 Save*' : '💾 Save' }}
         </button>
@@ -147,13 +140,12 @@
                 v-for="conn in connections"
                 :key="conn.id"
                 :d="getConnectionPath(conn)"
-                :stroke="selectedConnection?.id === conn.id ? '#e74c3c' : getConnectionColor(conn.type)"
-                :stroke-width="selectedConnection?.id === conn.id ? 5 : 3"
+                :stroke="getConnectionColor(conn.type)"
+                stroke-width="3"
                 :stroke-dasharray="getConnectionDash(conn.type) || null"
                 :marker-end="`url(#${getMarkerId(conn.type)})`"
                 fill="none"
                 style="pointer-events: stroke;"
-                @click.stop="handleConnectionClick(conn)"
             />
 
             <!-- Bend points (draggable middle points) -->
@@ -215,33 +207,6 @@
               </marker>
             </defs>
           </svg>
-
-          <!-- Connection labels (double click to edit) -->
-          <div class="labels-layer">
-            <div
-                v-for="conn in connections"
-                :key="`lbl-${conn.id}`"
-                v-if="(conn.label && conn.label.trim().length > 0) || selectedConnection?.id === conn.id || editingLabel?.connId === conn.id"
-                class="connection-label"
-                :style="getLabelStyle(conn)"
-                @click.stop="handleConnectionClick(conn)"
-                @dblclick.stop="startEditConnectionLabel(conn)"
-            >
-              <template v-if="editingLabel?.connId === conn.id">
-                <input
-                    ref="labelInput"
-                    v-model="editingLabel.value"
-                    class="label-input"
-                    @blur="saveConnectionLabel(conn)"
-                    @keydown.enter.prevent="saveConnectionLabel(conn)"
-                    @keydown.esc.prevent="cancelEditConnectionLabel"
-                />
-              </template>
-              <template v-else>
-                {{ (conn.label && conn.label.trim().length > 0) ? conn.label : 'Double click' }}
-              </template>
-            </div>
-          </div>
 
           <div
               v-if="isConnecting && connectionStart"
@@ -337,8 +302,6 @@ export default {
       elements: [],
       connections: [],
       selectedElement: null,
-      selectedConnection: null,
-      editingLabel: null,
       zoom: 1,
       currentDiagramId: null,
       diagrams: [],
@@ -606,14 +569,7 @@ export default {
 
       if (this.isPanning) return;
       if (!this.currentTool) {
-        // Select/move mode: clicking empty space clears selection
-        const {x, y} = this.getCanvasCoords(event);
-        const clickedElement = this.getElementAtPosition(x, y);
-        if (!clickedElement) {
-          this.selectedElement = null;
-          this.selectedConnection = null;
-          this.editingLabel = null;
-        }
+        console.log('No tool selected');
         return;
       }
 
@@ -938,12 +894,6 @@ export default {
       this.connections.push(connection);
 
       console.log('Total connections:', this.connections.length);
-
-      // Safe mode after creating connection
-      this.selectedConnection = connection;
-      this.selectedElement = null;
-      this.editingLabel = null;
-      this.selectTool(null);
     },
 
     async saveDiagram() {
@@ -1245,8 +1195,6 @@ export default {
       }
 
       this.selectedElement = element;
-      this.selectedConnection = null;
-      this.editingLabel = null;
     },
 
     handleResizeMouseDown(element, event) {
@@ -1282,60 +1230,6 @@ export default {
       // stop element dragging if any
       this.isDragging = false;
       this.dragElement = null;
-    },
-
-    handleConnectionClick(conn) {
-      this.selectedConnection = conn;
-      this.selectedElement = null;
-      this.editingLabel = null;
-      // Safe default: switch to select mode when user interacts with a connection
-      this.selectTool(null);
-    },
-
-    getLabelPoint(conn) {
-      const pts = Array.isArray(conn?.points) ? conn.points : [];
-      if (pts.length === 0) return { x: 0, y: 0 };
-      if (pts.length === 1) return pts[0];
-      const mid = (pts.length - 1) / 2;
-      if (Number.isInteger(mid)) return pts[mid];
-      const a = pts[Math.floor(mid)];
-      const b = pts[Math.ceil(mid)];
-      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-    },
-
-    getLabelStyle(conn) {
-      const p = this.getLabelPoint(conn);
-      const inv = this.zoom ? 1 / this.zoom : 1;
-      return {
-        left: `${p.x}px`,
-        top: `${p.y - 14}px`,
-        transform: `translate(-50%, -50%) scale(${inv})`,
-        transformOrigin: '0 0'
-      };
-    },
-
-    startEditConnectionLabel(conn) {
-      this.handleConnectionClick(conn);
-      this.editingLabel = { connId: conn.id, value: conn.label || '' };
-      this.$nextTick(() => {
-        const ref = this.$refs.labelInput;
-        const input = Array.isArray(ref) ? ref.find(Boolean) : ref;
-        if (input && input.focus) {
-          input.focus();
-          input.select?.();
-        }
-      });
-    },
-
-    saveConnectionLabel(conn) {
-      if (!this.editingLabel || this.editingLabel.connId !== conn.id) return;
-      conn.label = (this.editingLabel.value || '').trim();
-      this.editingLabel = null;
-      this.selectTool(null);
-    },
-
-    cancelEditConnectionLabel() {
-      this.editingLabel = null;
     },
 
     getDefaultMidpoint(a, b) {
@@ -1376,11 +1270,6 @@ export default {
       console.log('New element:', element);
       this.elements.push(element);
       this.selectedElement = element;
-
-      // Safe mode after creating element
-      this.selectedConnection = null;
-      this.editingLabel = null;
-      this.selectTool(null);
     },
 
     generateUUID() {
@@ -1522,11 +1411,6 @@ export default {
   background: #3498db;
   color: white;
   transition: background 0.2s;
-}
-
-.controls button.active {
-  background: #2d83be;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
 }
 
 .controls .diagram-select {
@@ -1749,40 +1633,6 @@ export default {
 .debug-badge.ok {
   background: #e9f7ef;
   color: #27ae60;
-}
-
-.labels-layer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 20;
-}
-
-.connection-label {
-  position: absolute;
-  pointer-events: all;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid #3498db;
-  color: #2c3e50;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
-  min-width: 80px;
-  text-align: center;
-  user-select: none;
-}
-
-.label-input {
-  width: 100%;
-  border: 1px solid #3498db;
-  border-radius: 4px;
-  padding: 2px 4px;
-  font-size: 12px;
-  outline: none;
-  box-sizing: border-box;
 }
 
 .element {

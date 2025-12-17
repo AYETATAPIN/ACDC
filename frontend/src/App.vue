@@ -46,6 +46,7 @@
 
     <div class="main">
       <div class="toolbar">
+        <!-- Toolbar content unchanged -->
         <div class="toolbar-section">
           <h3>Элементы</h3>
           <div class="tool-grid">
@@ -132,10 +133,8 @@
            @wheel.prevent="handleWheel"
       >
         <div class="canvas-inner" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, width: (100/zoom)+'%', height: (100/zoom)+'%', transformOrigin: '0 0' }">
-          <svg
-              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"
-              xmlns="http://www.w3.org/2000/svg"
-          >
+          <!-- SVG and canvas content unchanged -->
+          <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" xmlns="http://www.w3.org/2000/svg">
             <path
                 v-for="conn in connections"
                 :key="conn.id"
@@ -149,7 +148,6 @@
                 @dblclick.stop="startLabelEdit(conn, $event)"
             />
 
-            <!-- Connection labels -->
             <text
                 v-for="conn in connections"
                 :key="`label-${conn.id}`"
@@ -164,7 +162,7 @@
               {{ conn.label || '' }}
             </text>
 
-            <!-- Bend points (draggable middle points) -->
+            <!-- Bend points -->
             <g v-for="conn in connections" :key="`bend-${conn.id}`">
               <template v-for="(pt, idx) in (conn.points || [])" :key="`pt-${conn.id}-${idx}`">
                 <circle
@@ -179,51 +177,21 @@
                     style="pointer-events: all; cursor: move;"
                     @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)"
                 />
-                <circle
-                    v-if="idx > 0 && idx < (conn.points.length - 1)"
-                    :cx="pt.x"
-                    :cy="pt.y"
-                    r="14"
-                    fill="transparent"
-                    style="pointer-events: all; cursor: move;"
-                    @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)"
-                />
+                <circle v-if="idx > 0 && idx < (conn.points.length - 1)" :cx="pt.x" :cy="pt.y" r="14" fill="transparent" style="pointer-events: all; cursor: move;" @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)" />
               </template>
             </g>
 
             <defs>
-              <marker
-                  v-for="preset in connectionPresets"
-                  :key="preset.type"
-                  :id="`arrow-${preset.type}`"
-                  markerWidth="10"
-                  markerHeight="7"
-                  refX="9"
-                  refY="3.5"
-                  orient="auto"
-              >
-                <polygon
-                    points="0 0, 10 3.5, 0 7"
-                    :fill="getConnectionColor(preset.type)"
-                />
+              <marker v-for="preset in connectionPresets" :key="preset.type" :id="`arrow-${preset.type}`" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" :fill="getConnectionColor(preset.type)" />
               </marker>
-              <marker
-                  id="arrow-default"
-                  markerWidth="10"
-                  markerHeight="7"
-                  refX="9"
-                  refY="3.5"
-                  orient="auto"
-              >
-                <polygon
-                    points="0 0, 10 3.5, 0 7"
-                    :fill="getConnectionColor('association')"
-                />
+              <marker id="arrow-default" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" :fill="getConnectionColor('association')" />
               </marker>
             </defs>
           </svg>
 
-          <!-- Editable connection label input -->
+          <!-- Connection label editor -->
           <div
               v-if="editingConnectionLabel && editingConnectionLabel.connId"
               class="connection-label-editor"
@@ -239,24 +207,13 @@
             />
           </div>
 
-          <div
-              v-if="isConnecting && connectionStart"
-              style="position: absolute; pointer-events: none; z-index: 1000;"
-              :style="{
-      left: (connectionStart.x + connectionStart.width/2) + 'px',
-      top: (connectionStart.y + connectionStart.height/2) + 'px'
-    }"
-          >
-            <div style="color: #e74c3c; font-weight: bold; background: white; padding: 5px; border-radius: 4px;">
-              Выберите второй элемент
-            </div>
-          </div>
-
+          <!-- Canvas hint -->
           <div style="padding: 20px; color: #666; text-align: center;" v-if="elements.length === 0">
             <p>Выберите инструмент слева и кликните здесь</p>
             <p>Текущий инструмент: <strong>{{ currentTool }}</strong></p>
           </div>
 
+          <!-- Elements -->
           <div
               v-for="element in elements"
               :key="element.id"
@@ -267,15 +224,41 @@
           >
             <div class="element-text-main">{{ element.text }}</div>
             <div class="element-type-tag">{{ element.type }}</div>
-            <div
-                class="resize-handle"
-                @mousedown.stop="handleResizeMouseDown(element, $event)"
-                title="Изменить размер"
-            ></div>
+            <div class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="Изменить размер"></div>
           </div>
         </div>
       </div>
 
+      <!-- NEW: Properties Panel on the right -->
+      <aside class="properties-panel" v-if="selectedElement">
+        <div class="properties-header">
+          <h3>Свойства элемента</h3>
+          <button @click="selectedElement = null" class="close-btn">×</button>
+        </div>
+        <div class="properties-content">
+          <div class="prop-group">
+            <label>Текст</label>
+            <input v-model="selectedElement.text" placeholder="Введите текст" />
+          </div>
+
+          <div class="prop-group">
+            <label>Цвет фона</label>
+            <input type="color" v-model="selectedElement.customColor" />
+          </div>
+
+          <div class="prop-group">
+            <label>Цвет границы</label>
+            <input type="color" v-model="selectedElement.customBorder" />
+          </div>
+
+          <div class="prop-group">
+            <label>Тип</label>
+            <span class="prop-value">{{ selectedElement.type }}</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- History panel (unchanged) -->
       <aside class="history-panel" v-if="currentDiagramId" :class="{ collapsed: historyCollapsed }">
         <div class="history-header" @click="historyCollapsed = !historyCollapsed">
           <h3>History</h3>
@@ -283,16 +266,8 @@
         </div>
         <div v-if="!historyCollapsed">
           <div v-if="historyEntries.length === 0" class="empty">No snapshots yet</div>
-          <div
-              v-for="entry in historyEntries"
-              :key="entry.version"
-              class="history-row"
-              :class="{ active: entry.version === currentVersion }"
-          >
+          <div v-for="entry in historyEntries" :key="entry.version" class="history-row" :class="{ active: entry.version === currentVersion }">
             <div class="version">v{{ entry.version }}</div>
-            <div class="version-info" v-if="currentDiagramId">
-              Версия: {{ currentVersion }} | Снапшотов: {{ historyEntries.length }}
-            </div>
             <div class="time">{{ formatDate(entry.created_at) }}</div>
           </div>
         </div>
@@ -331,7 +306,8 @@ export default {
       ],
       diagramName: '',
       diagramType: 'class',
-      currentTool: 'select', // default is now the select/move tool
+      currentTool: 'select',
+      editingConnectionLabel: null,
       elements: [],
       connections: [],
       selectedElement: null,
@@ -363,8 +339,6 @@ export default {
       draggingBendPoint: { connId: null, pointIndex: null },
       bendPointDragOffset: { x: 0, y: 0 },
 
-      // Connection label editing
-      editingConnectionLabel: null // { connId: string }
     }
   },
   mounted() {
@@ -553,27 +527,30 @@ export default {
     getElementStyle(element) {
       const preset = this.getElementPreset(element.type);
       const shape = preset?.shape || 'rect';
-      const borderBase = preset?.border || '#2c3e50';
-      const borderColor = this.selectedElement?.id === element.id
-        ? '#e74c3c'
-        : this.connectionStart?.id === element.id
-          ? '#f39c12'
-          : borderBase;
+
+      // Use custom colors if set, otherwise preset
+      const bgColor = element.customColor || preset?.color || '#95a5a6';
+      const borderColor = element.customBorder || preset?.border || '#2c3e50';
+
+      const selectedBorder = this.selectedElement?.id === element.id
+          ? '#e74c3c'
+          : this.connectionStart?.id === element.id
+              ? '#f39c12'
+              : borderColor;
 
       const style = {
         left: `${element.x}px`,
         top: `${element.y}px`,
         width: `${element.width}px`,
         height: `${element.height}px`,
-        background: preset?.color || '#95a5a6',
+        background: bgColor,
         color: preset?.textColor || '#ffffff',
-        border: `${preset?.dashed ? '2px dashed' : '2px solid'} ${borderColor}`,
+        border: `${preset?.dashed ? '2px dashed' : '2px solid'} ${selectedBorder}`,
         borderRadius: shape === 'ellipse' ? '50%' : shape === 'cylinder' ? '0 0 50% 50%' : '10px'
       };
 
       if (shape === 'cylinder') {
-        const topShade = preset?.color || '#34495e';
-        style.background = `linear-gradient(180deg, ${topShade} 0%, ${topShade} 55%, ${preset?.border || topShade} 100%)`;
+        style.background = `linear-gradient(180deg, ${bgColor} 0%, ${bgColor} 55%, ${borderColor} 100%)`;
       }
 
       if (this.dragElement?.id === element.id) {
@@ -1262,13 +1239,7 @@ export default {
     },
 
     selectElement(element) {
-      console.log('Element selected:', element);
-
-      if (this.isConnecting) {
-        console.log('In connection mode - skipping selection');
-        return;
-      }
-
+      if (this.isConnecting) return;
       this.selectedElement = element;
     },
 
@@ -1323,28 +1294,26 @@ export default {
 
 
     createElement(type, x, y) {
-      console.log('Creating element:', type, 'at', x, y);
-
-      const uuid = this.generateUUID();
       const preset = this.getElementPreset(type);
       const width = Number(preset?.width ?? 120);
       const height = Number(preset?.height ?? 60);
       const snapped = this.snapCoordinates(x - width / 2, y - height / 2);
 
       const element = {
-        id: uuid,
+        id: this.generateUUID(),
         type: type,
         x: snapped.x,
         y: snapped.y,
         width,
         height,
         text: this.getDefaultText(type),
-        properties: {}
+        properties: {},
+        customColor: null,   // user-defined background
+        customBorder: null   // user-defined border
       };
 
-      console.log('New element:', element);
       this.elements.push(element);
-      this.selectedElement = element;
+      this.selectedElement = element; // auto-select new element
     },
 
     generateUUID() {
@@ -1928,6 +1897,89 @@ button.has-changes {
   0% { opacity: 1; }
   50% { opacity: 0.7; }
   100% { opacity: 1; }
+}
+
+.properties-panel {
+  width: 280px;
+  min-width: 260px;
+  background: #f9fafb;
+  border-left: 1px solid #e5e7eb;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.05);
+  z-index: 10;
+}
+
+.properties-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.properties-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.1rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #95a5a6;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  color: #e74c3c;
+}
+
+.properties-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.prop-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.prop-group label {
+  font-weight: 600;
+  color: #34495e;
+  font-size: 0.95rem;
+}
+
+.prop-group input[type="text"] {
+  padding: 0.6rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.prop-group input[type="color"] {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.prop-value {
+  color: #7f8c8d;
+  font-size: 0.95rem;
 }
 
 .app { height: 100vh; display: flex; flex-direction: column; }

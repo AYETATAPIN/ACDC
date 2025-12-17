@@ -118,13 +118,9 @@
       </div>
 
       <div class="canvas"
-           :style="{
-         background: snapToGrid
-             ? 'linear-gradient(90deg, #f0f0f0 1px, transparent 1px), linear-gradient(#f0f0f0 1px, transparent 1px)'
-             : 'white',
-         backgroundSize: snapToGrid ? `${gridSize}px ${gridSize}px` : 'auto',
-         height: canvasHeight + 'px'
-     }"
+           :style="{ background: snapToGrid ? 'linear-gradient(90deg, #f0f0f0 1px, transparent 1px), linear-gradient(#f0f0f0 1px, transparent 1px)' : 'white',
+                     backgroundSize: snapToGrid ? `${gridSize}px ${gridSize}px` : 'auto',
+                     height: canvasHeight + 'px' }"
            @click="handleCanvasClick"
            @mousedown="handleMouseDown"
            @mousemove="handleMouseMove"
@@ -133,21 +129,24 @@
            @wheel.prevent="handleWheel"
       >
         <div class="canvas-inner" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, width: (100/zoom)+'%', height: (100/zoom)+'%', transformOrigin: '0 0' }">
-          <!-- SVG and canvas content unchanged -->
           <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" xmlns="http://www.w3.org/2000/svg">
+            <!-- Connections with click to select -->
             <path
                 v-for="conn in connections"
                 :key="conn.id"
                 :d="getConnectionPath(conn)"
-                :stroke="getConnectionColor(conn.type)"
-                stroke-width="3"
-                :stroke-dasharray="getConnectionDash(conn.type) || null"
+                :stroke="conn.customColor || getConnectionColor(conn.type)"
+                stroke-width="4"
+                :stroke-dasharray="conn.customDash || getConnectionDash(conn.type) || null"
                 :marker-end="`url(#${getMarkerId(conn.type)})`"
                 fill="none"
                 style="pointer-events: stroke; cursor: pointer;"
+                @click.stop="selectConnection(conn)"
                 @dblclick.stop="startLabelEdit(conn, $event)"
+                :class="{ 'selected-connection': selectedConnection?.id === conn.id }"
             />
 
+            <!-- Connection labels -->
             <text
                 v-for="conn in connections"
                 :key="`label-${conn.id}`"
@@ -155,8 +154,8 @@
                 :y="getLabelPosition(conn).y"
                 text-anchor="middle"
                 dominant-baseline="middle"
-                font-size="12"
-                fill="#2c3e50"
+                :font-size="conn.labelFontSize || 12"
+                :fill="conn.labelColor || '#2c3e50'"
                 style="pointer-events: none; user-select: none;"
             >
               {{ conn.label || '' }}
@@ -222,39 +221,78 @@
               :style="getElementStyle(element)"
               @click.stop="handleElementClick(element)"
           >
-            <div class="element-text-main">{{ element.text }}</div>
+            <div class="element-text-main" :style="{ fontSize: (element.fontSize || 14) + 'px' }">{{ element.text }}</div>
             <div class="element-type-tag">{{ element.type }}</div>
             <div class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="Изменить размер"></div>
           </div>
         </div>
       </div>
 
-      <!-- NEW: Properties Panel on the right -->
-      <aside class="properties-panel" v-if="selectedElement">
+      <!-- Unified Properties Panel (for element OR connection) -->
+      <aside class="properties-panel" v-if="selectedElement || selectedConnection">
         <div class="properties-header">
-          <h3>Свойства элемента</h3>
-          <button @click="selectedElement = null" class="close-btn">×</button>
+          <h3>{{ selectedElement ? 'Свойства элемента' : 'Свойства связи' }}</h3>
+          <button @click="deselectAll" class="close-btn">×</button>
         </div>
         <div class="properties-content">
-          <div class="prop-group">
-            <label>Текст</label>
-            <input v-model="selectedElement.text" placeholder="Введите текст" />
-          </div>
+          <!-- Element Properties -->
+          <template v-if="selectedElement">
+            <div class="prop-group">
+              <label>Текст</label>
+              <input v-model="selectedElement.text" placeholder="Введите текст" />
+            </div>
+            <div class="prop-group">
+              <label>Размер шрифта</label>
+              <input type="range" min="10" max="30" v-model.number="selectedElement.fontSize" />
+              <span>{{ selectedElement.fontSize || 14 }}px</span>
+            </div>
+            <div class="prop-group">
+              <label>Цвет фона</label>
+              <input type="color" :value="selectedElement.customColor || getElementPreset(selectedElement.type)?.color || '#95a5a6'" @input="selectedElement.customColor = $event.target.value" />
+            </div>
+            <div class="prop-group">
+              <label>Цвет границы</label>
+              <input type="color" :value="selectedElement.customBorder || getElementPreset(selectedElement.type)?.border || '#2c3e50'" @input="selectedElement.customBorder = $event.target.value" />
+            </div>
+            <div class="prop-group">
+              <label>Тип</label>
+              <span class="prop-value">{{ selectedElement.type }}</span>
+            </div>
+          </template>
 
-          <div class="prop-group">
-            <label>Цвет фона</label>
-            <input type="color" v-model="selectedElement.customColor" />
-          </div>
-
-          <div class="prop-group">
-            <label>Цвет границы</label>
-            <input type="color" v-model="selectedElement.customBorder" />
-          </div>
-
-          <div class="prop-group">
-            <label>Тип</label>
-            <span class="prop-value">{{ selectedElement.type }}</span>
-          </div>
+          <!-- Connection Properties -->
+          <template v-else-if="selectedConnection">
+            <div class="prop-group">
+              <label>Надпись</label>
+              <input v-model="selectedConnection.label" placeholder="Текст надписи" />
+            </div>
+            <div class="prop-group">
+              <label>Цвет надписи</label>
+              <input type="color" v-model="selectedConnection.labelColor" />
+            </div>
+            <div class="prop-group">
+              <label>Размер шрифта надписи</label>
+              <input type="range" min="8" max="24" step="1" v-model.number="selectedConnection.labelFontSize" />
+              <span>{{ selectedConnection.labelFontSize || 12 }}px</span>
+            </div>
+            <div class="prop-group">
+              <label>Цвет линии</label>
+              <input type="color" v-model="selectedConnection.customColor" />
+            </div>
+            <div class="prop-group">
+              <label>Стиль линии</label>
+              <select v-model="selectedConnection.customDash">
+                <option value="">Сплошная</option>
+                <option value="6 4">Пунктир</option>
+                <option value="10 6">Длинный пунктир</option>
+                <option value="3 3">Точечная</option>
+              </select>
+            </div>
+            <div class="prop-group">
+              <label>Тип связи</label>
+              <span class="prop-value">{{ selectedConnection.type }}</span>
+            </div>
+          </template>
         </div>
       </aside>
 
@@ -307,6 +345,7 @@ export default {
       diagramName: '',
       diagramType: 'class',
       currentTool: 'select',
+      selectedConnection: null,
       editingConnectionLabel: null,
       elements: [],
       connections: [],
@@ -528,15 +567,14 @@ export default {
       const preset = this.getElementPreset(element.type);
       const shape = preset?.shape || 'rect';
 
-      // Use custom colors if set, otherwise preset
       const bgColor = element.customColor || preset?.color || '#95a5a6';
-      const borderColor = element.customBorder || preset?.border || '#2c3e50';
+      const borderBase = element.customBorder || preset?.border || '#2c3e50';
 
-      const selectedBorder = this.selectedElement?.id === element.id
+      const borderColor = this.selectedElement?.id === element.id
           ? '#e74c3c'
           : this.connectionStart?.id === element.id
               ? '#f39c12'
-              : borderColor;
+              : borderBase;
 
       const style = {
         left: `${element.x}px`,
@@ -545,12 +583,12 @@ export default {
         height: `${element.height}px`,
         background: bgColor,
         color: preset?.textColor || '#ffffff',
-        border: `${preset?.dashed ? '2px dashed' : '2px solid'} ${selectedBorder}`,
+        border: `${preset?.dashed ? '2px dashed' : '2px solid'} ${borderColor}`,
         borderRadius: shape === 'ellipse' ? '50%' : shape === 'cylinder' ? '0 0 50% 50%' : '10px'
       };
 
       if (shape === 'cylinder') {
-        style.background = `linear-gradient(180deg, ${bgColor} 0%, ${bgColor} 55%, ${borderColor} 100%)`;
+        style.background = `linear-gradient(180deg, ${bgColor} 0%, ${bgColor} 55%, ${borderBase} 100%)`;
       }
 
       if (this.dragElement?.id === element.id) {
@@ -619,7 +657,7 @@ export default {
 
     handleCanvasClick(event) {
       if (this.currentTool === 'select' || this.currentTool === 'delete') {
-        this.selectedElement = null;
+        this.deselectAll();
         return;
       }
 
@@ -939,13 +977,13 @@ export default {
         to: toElement.id,
         type: this.currentTool,
         label: '',
-        points: this.calculateConnectionPoints(fromElement, toElement)
+        points: this.calculateConnectionPoints(fromElement, toElement),
+        customColor: null,
+        customDash: null,
+        labelColor: '#2c3e50',
+        labelFontSize: 12
       };
-
-      console.log('Connection points:', connection.points);
       this.connections.push(connection);
-
-      console.log('Total connections:', this.connections.length);
     },
 
     async saveDiagram() {
@@ -1241,6 +1279,17 @@ export default {
     selectElement(element) {
       if (this.isConnecting) return;
       this.selectedElement = element;
+      this.selectedConnection = null; // deselect connection if any
+    },
+
+    selectConnection(conn) {
+      this.selectedConnection = conn;
+      this.selectedElement = null;
+    },
+
+    deselectAll() {
+      this.selectedElement = null;
+      this.selectedConnection = null;
     },
 
     handleResizeMouseDown(element, event) {
@@ -1295,25 +1344,21 @@ export default {
 
     createElement(type, x, y) {
       const preset = this.getElementPreset(type);
-      const width = Number(preset?.width ?? 120);
-      const height = Number(preset?.height ?? 60);
-      const snapped = this.snapCoordinates(x - width / 2, y - height / 2);
-
       const element = {
         id: this.generateUUID(),
         type: type,
-        x: snapped.x,
-        y: snapped.y,
-        width,
-        height,
+        x: this.snapCoordinates(x - (preset?.width || 120)/2, y - (preset?.height || 60)/2).x,
+        y: this.snapCoordinates(x - (preset?.width || 120)/2, y - (preset?.height || 60)/2).y,
+        width: preset?.width || 120,
+        height: preset?.height || 60,
         text: this.getDefaultText(type),
-        properties: {},
-        customColor: null,   // user-defined background
-        customBorder: null   // user-defined border
+        fontSize: 14,
+        customColor: null,
+        customBorder: null,
+        properties: {}
       };
-
       this.elements.push(element);
-      this.selectedElement = element; // auto-select new element
+      this.selectElement(element);
     },
 
     generateUUID() {
@@ -1980,6 +2025,25 @@ button.has-changes {
 .prop-value {
   color: #7f8c8d;
   font-size: 0.95rem;
+}
+
+.selected-connection {
+  filter: drop-shadow(0 0 6px #3498db);
+  stroke-width: 6 !important;
+}
+
+
+.prop-group span {
+  margin-left: 0.5rem;
+  color: #7f8c8d;
+  font-size: 0.9rem;
+}
+
+.prop-group select {
+  padding: 0.6rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: white;
 }
 
 .app { height: 100vh; display: flex; flex-direction: column; }

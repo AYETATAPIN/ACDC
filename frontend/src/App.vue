@@ -46,6 +46,7 @@
 
     <div class="main">
       <div class="toolbar">
+        <!-- Toolbar content unchanged -->
         <div class="toolbar-section">
           <h3>Элементы</h3>
           <div class="tool-grid">
@@ -132,73 +133,87 @@
            @wheel.prevent="handleWheel"
       >
         <div class="canvas-inner" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, width: (100/zoom)+'%', height: (100/zoom)+'%', transformOrigin: '0 0' }">
-          <svg
-              style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"
-              xmlns="http://www.w3.org/2000/svg"
-          >
-            <line
+          <!-- SVG and canvas content unchanged -->
+          <svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;" xmlns="http://www.w3.org/2000/svg">
+            <path
                 v-for="conn in connections"
                 :key="conn.id"
-                :x1="conn.points?.[0]?.x || 0"
-                :y1="conn.points?.[0]?.y || 0"
-                :x2="conn.points?.[1]?.x || 0"
-                :y2="conn.points?.[1]?.y || 0"
+                :d="getConnectionPath(conn)"
                 :stroke="getConnectionColor(conn.type)"
                 stroke-width="3"
                 :stroke-dasharray="getConnectionDash(conn.type) || null"
                 :marker-end="`url(#${getMarkerId(conn.type)})`"
+                fill="none"
+                style="pointer-events: stroke; cursor: pointer;"
+                @dblclick.stop="startLabelEdit(conn, $event)"
             />
 
+            <text
+                v-for="conn in connections"
+                :key="`label-${conn.id}`"
+                :x="getLabelPosition(conn).x"
+                :y="getLabelPosition(conn).y"
+                text-anchor="middle"
+                dominant-baseline="middle"
+                font-size="12"
+                fill="#2c3e50"
+                style="pointer-events: none; user-select: none;"
+            >
+              {{ conn.label || '' }}
+            </text>
+
+            <!-- Bend points -->
+            <g v-for="conn in connections" :key="`bend-${conn.id}`">
+              <template v-for="(pt, idx) in (conn.points || [])" :key="`pt-${conn.id}-${idx}`">
+                <circle
+                    v-if="idx > 0 && idx < (conn.points.length - 1)"
+                    class="bend-point"
+                    :cx="pt.x"
+                    :cy="pt.y"
+                    :r="(draggingBendPoint.connId === conn.id && draggingBendPoint.pointIndex === idx) ? 8 : 6"
+                    :fill="(draggingBendPoint.connId === conn.id && draggingBendPoint.pointIndex === idx) ? '#c0392b' : '#e74c3c'"
+                    stroke="#ffffff"
+                    stroke-width="2"
+                    style="pointer-events: all; cursor: move;"
+                    @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)"
+                />
+                <circle v-if="idx > 0 && idx < (conn.points.length - 1)" :cx="pt.x" :cy="pt.y" r="14" fill="transparent" style="pointer-events: all; cursor: move;" @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)" />
+              </template>
+            </g>
+
             <defs>
-              <marker
-                  v-for="preset in connectionPresets"
-                  :key="preset.type"
-                  :id="`arrow-${preset.type}`"
-                  markerWidth="10"
-                  markerHeight="7"
-                  refX="9"
-                  refY="3.5"
-                  orient="auto"
-              >
-                <polygon
-                    points="0 0, 10 3.5, 0 7"
-                    :fill="getConnectionColor(preset.type)"
-                />
+              <marker v-for="preset in connectionPresets" :key="preset.type" :id="`arrow-${preset.type}`" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" :fill="getConnectionColor(preset.type)" />
               </marker>
-              <marker
-                  id="arrow-default"
-                  markerWidth="10"
-                  markerHeight="7"
-                  refX="9"
-                  refY="3.5"
-                  orient="auto"
-              >
-                <polygon
-                    points="0 0, 10 3.5, 0 7"
-                    :fill="getConnectionColor('association')"
-                />
+              <marker id="arrow-default" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" :fill="getConnectionColor('association')" />
               </marker>
             </defs>
           </svg>
 
+          <!-- Connection label editor -->
           <div
-              v-if="isConnecting && connectionStart"
-              style="position: absolute; pointer-events: none; z-index: 1000;"
-              :style="{
-      left: (connectionStart.x + connectionStart.width/2) + 'px',
-      top: (connectionStart.y + connectionStart.height/2) + 'px'
-    }"
+              v-if="editingConnectionLabel && editingConnectionLabel.connId"
+              class="connection-label-editor"
+              :style="getLabelEditorStyle(editingConnectionLabel.connId)"
           >
-            <div style="color: #e74c3c; font-weight: bold; background: white; padding: 5px; border-radius: 4px;">
-              Выберите второй элемент
-            </div>
+            <input
+                v-model="getConnectionById(editingConnectionLabel.connId).label"
+                @blur="finishLabelEdit"
+                @keyup.enter="finishLabelEdit"
+                @keyup.esc="cancelLabelEdit"
+                ref="labelInput"
+                autofocus
+            />
           </div>
 
+          <!-- Canvas hint -->
           <div style="padding: 20px; color: #666; text-align: center;" v-if="elements.length === 0">
             <p>Выберите инструмент слева и кликните здесь</p>
             <p>Текущий инструмент: <strong>{{ currentTool }}</strong></p>
           </div>
 
+          <!-- Elements -->
           <div
               v-for="element in elements"
               :key="element.id"
@@ -209,15 +224,41 @@
           >
             <div class="element-text-main">{{ element.text }}</div>
             <div class="element-type-tag">{{ element.type }}</div>
-            <div
-                class="resize-handle"
-                @mousedown.stop="handleResizeMouseDown(element, $event)"
-                title="Изменить размер"
-            ></div>
+            <div class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="Изменить размер"></div>
           </div>
         </div>
       </div>
 
+      <!-- NEW: Properties Panel on the right -->
+      <aside class="properties-panel" v-if="selectedElement">
+        <div class="properties-header">
+          <h3>Свойства элемента</h3>
+          <button @click="selectedElement = null" class="close-btn">×</button>
+        </div>
+        <div class="properties-content">
+          <div class="prop-group">
+            <label>Текст</label>
+            <input v-model="selectedElement.text" placeholder="Введите текст" />
+          </div>
+
+          <div class="prop-group">
+            <label>Цвет фона</label>
+            <input type="color" v-model="selectedElement.customColor" />
+          </div>
+
+          <div class="prop-group">
+            <label>Цвет границы</label>
+            <input type="color" v-model="selectedElement.customBorder" />
+          </div>
+
+          <div class="prop-group">
+            <label>Тип</label>
+            <span class="prop-value">{{ selectedElement.type }}</span>
+          </div>
+        </div>
+      </aside>
+
+      <!-- History panel (unchanged) -->
       <aside class="history-panel" v-if="currentDiagramId" :class="{ collapsed: historyCollapsed }">
         <div class="history-header" @click="historyCollapsed = !historyCollapsed">
           <h3>History</h3>
@@ -225,16 +266,8 @@
         </div>
         <div v-if="!historyCollapsed">
           <div v-if="historyEntries.length === 0" class="empty">No snapshots yet</div>
-          <div
-              v-for="entry in historyEntries"
-              :key="entry.version"
-              class="history-row"
-              :class="{ active: entry.version === currentVersion }"
-          >
+          <div v-for="entry in historyEntries" :key="entry.version" class="history-row" :class="{ active: entry.version === currentVersion }">
             <div class="version">v{{ entry.version }}</div>
-            <div class="version-info" v-if="currentDiagramId">
-              Версия: {{ currentVersion }} | Снапшотов: {{ historyEntries.length }}
-            </div>
             <div class="time">{{ formatDate(entry.created_at) }}</div>
           </div>
         </div>
@@ -253,6 +286,8 @@ export default {
       snapToGrid: true,
       gridSize: 10,
       elementPresets: [
+        { type: 'select', label: 'Select/Move', shape: '➡️', diagrams: ['class', 'use_case', 'free_mode'] },
+        { type: 'delete', label: 'Delete', shape: '🗑️', diagrams: ['class', 'use_case', 'free_mode'] },
         { type: 'class', label: 'Class', shape: 'rect', color: '#3498db', border: '#2d83be', textColor: '#ffffff', width: 140, height: 80, diagrams: ['class', 'free_mode'] },
         { type: 'interface', label: 'Interface', shape: 'rect', color: '#9b59b6', border: '#8e44ad', textColor: '#ffffff', width: 140, height: 80, diagrams: ['class', 'free_mode'] },
         { type: 'enum', label: 'Enum', shape: 'rect', color: '#e67e22', border: '#d35400', textColor: '#ffffff', width: 140, height: 80, diagrams: ['class', 'free_mode'] },
@@ -271,7 +306,8 @@ export default {
       ],
       diagramName: '',
       diagramType: 'class',
-      currentTool: 'class',
+      currentTool: 'select',
+      editingConnectionLabel: null,
       elements: [],
       connections: [],
       selectedElement: null,
@@ -297,20 +333,25 @@ export default {
       pan: { x: 0, y: 0 },
       isPanning: false,
       panStart: { x: 0, y: 0 },
-      pointerStart: { x: 0, y: 0 }
+      pointerStart: { x: 0, y: 0 },
+
+      // Bend point drag
+      draggingBendPoint: { connId: null, pointIndex: null },
+      bendPointDragOffset: { x: 0, y: 0 },
+
     }
   },
   mounted() {
-    // Добавляем глобальные обработчики для гарантированного отлова mouseup
     window.addEventListener('mouseup', this.handleGlobalMouseUp);
     window.addEventListener('mouseleave', this.handleGlobalMouseUp);
+    window.addEventListener('keydown', this.handleKeyDown);
     this.loadDiagramsList();
   },
 
   beforeUnmount() {
-    // Очищаем глобальные обработчики при уничтожении компонента
     window.removeEventListener('mouseup', this.handleGlobalMouseUp);
     window.removeEventListener('mouseleave', this.handleGlobalMouseUp);
+    window.removeEventListener('keydown', this.handleKeyDown);
   },
 
   computed: {
@@ -329,21 +370,9 @@ export default {
   },
 
   watch: {
-    elements: {
-      handler() {
-        this.checkForChanges();
-      },
-      deep: true
-    },
-    connections: {
-      handler() {
-        this.checkForChanges();
-      },
-      deep: true
-    },
-    diagramName() {
-      this.checkForChanges();
-    },
+    elements: { handler() { this.checkForChanges(); }, deep: true },
+    connections: { handler() { this.checkForChanges(); }, deep: true },
+    diagramName() { this.checkForChanges(); },
     diagramType() {
       this.checkForChanges();
       this.ensureToolFitsDiagram();
@@ -363,10 +392,7 @@ export default {
         diagramName: this.diagramName,
         diagramType: this.diagramType
       };
-
-      // Сравниваем с последним сохраненным состоянием
-      if (!this.lastSavedState ||
-          JSON.stringify(currentState) !== JSON.stringify(this.lastSavedState)) {
+      if (!this.lastSavedState || JSON.stringify(currentState) !== JSON.stringify(this.lastSavedState)) {
         this.hasUnsavedChanges = true;
       } else {
         this.hasUnsavedChanges = false;
@@ -378,7 +404,6 @@ export default {
       if (!allTools.includes(this.currentTool)) {
         this.currentTool = this.defaultToolForDiagram();
       }
-      // Сбрасываем режим соединения, если текущая диаграмма не поддерживает выбранный тип
       if (this.connectionStart && !this.connectionToolTypes.includes(this.currentTool)) {
         this.connectionStart = null;
         this.isConnecting = false;
@@ -386,6 +411,8 @@ export default {
     },
 
     defaultToolForDiagram() {
+      // Prefer select tool first
+      if (this.availableElementTools.find(t => t.type === 'select')) return 'select';
       const fallback = this.availableElementTools[0]?.type;
       if (this.diagramType === 'use_case') return this.availableElementTools.find(t => t.type === 'actor')?.type || fallback || null;
       return fallback || null;
@@ -394,6 +421,60 @@ export default {
     adjustCanvasHeight(delta) {
       const next = Number(this.canvasHeight || 0) + delta;
       this.canvasHeight = Math.max(400, next);
+    },
+
+    handleKeyDown(event) {
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (this.selectedElement) {
+          this.deleteElement(this.selectedElement);
+        }
+      }
+    },
+
+    getMidPoint(conn) {
+      const pts = conn.points || [];
+      if (pts.length < 2) return { x: 0, y: 0 };
+      const midIdx = Math.floor(pts.length / 2);
+      return pts[midIdx];
+    },
+
+    getLabelPosition(conn) {
+      const mid = this.getMidPoint(conn);
+      return { x: mid.x, y: mid.y - 10 };
+    },
+
+    getLabelEditorStyle(connId) {
+      const conn = this.connections.find(c => c.id === connId);
+      if (!conn) return {};
+      const pos = this.getLabelPosition(conn);
+      return {
+        position: 'absolute',
+        left: `${pos.x}px`,
+        top: `${pos.y}px`,
+        transform: 'translate(-50%, -50%)',
+        'z-index': 2000
+      };
+    },
+
+    getConnectionById(id) {
+      return this.connections.find(c => c.id === id) || { label: '' };
+    },
+
+    startLabelEdit(conn, event) {
+      this.editingConnectionLabel = { connId: conn.id };
+      this.$nextTick(() => {
+        if (this.$refs.labelInput && this.$refs.labelInput.focus) {
+          this.$refs.labelInput.focus();
+        }
+      });
+    },
+
+    finishLabelEdit() {
+      this.editingConnectionLabel = null;
+    },
+
+    cancelLabelEdit() {
+      this.editingConnectionLabel = null;
     },
 
     setZoom(value) {
@@ -436,6 +517,7 @@ export default {
       this.currentTool = toolType;
       this.connectionStart = null;
       this.isConnecting = false;
+      this.selectedElement = null;
     },
 
     getElementShape(type) {
@@ -445,27 +527,30 @@ export default {
     getElementStyle(element) {
       const preset = this.getElementPreset(element.type);
       const shape = preset?.shape || 'rect';
-      const borderBase = preset?.border || '#2c3e50';
-      const borderColor = this.selectedElement?.id === element.id
-        ? '#e74c3c'
-        : this.connectionStart?.id === element.id
-          ? '#f39c12'
-          : borderBase;
+
+      // Use custom colors if set, otherwise preset
+      const bgColor = element.customColor || preset?.color || '#95a5a6';
+      const borderColor = element.customBorder || preset?.border || '#2c3e50';
+
+      const selectedBorder = this.selectedElement?.id === element.id
+          ? '#e74c3c'
+          : this.connectionStart?.id === element.id
+              ? '#f39c12'
+              : borderColor;
 
       const style = {
         left: `${element.x}px`,
         top: `${element.y}px`,
         width: `${element.width}px`,
         height: `${element.height}px`,
-        background: preset?.color || '#95a5a6',
+        background: bgColor,
         color: preset?.textColor || '#ffffff',
-        border: `${preset?.dashed ? '2px dashed' : '2px solid'} ${borderColor}`,
+        border: `${preset?.dashed ? '2px dashed' : '2px solid'} ${selectedBorder}`,
         borderRadius: shape === 'ellipse' ? '50%' : shape === 'cylinder' ? '0 0 50% 50%' : '10px'
       };
 
       if (shape === 'cylinder') {
-        const topShade = preset?.color || '#34495e';
-        style.background = `linear-gradient(180deg, ${topShade} 0%, ${topShade} 55%, ${preset?.border || topShade} 100%)`;
+        style.background = `linear-gradient(180deg, ${bgColor} 0%, ${bgColor} 55%, ${borderColor} 100%)`;
       }
 
       if (this.dragElement?.id === element.id) {
@@ -517,6 +602,10 @@ export default {
         this.isPanning = false;
       }
 
+      if (this.draggingBendPoint.connId) {
+        this.draggingBendPoint = { connId: null, pointIndex: null };
+      }
+
       // НЕ отменяем режим соединения при глобальном mouseup,
       // так как пользователь может кликать на элементы для создания связи
       // Режим соединения отменяется только:
@@ -529,57 +618,55 @@ export default {
     },
 
     handleCanvasClick(event) {
-      console.log('Canvas clicked!', event);
-      console.log('Current tool:', this.currentTool);
+      if (this.currentTool === 'select' || this.currentTool === 'delete') {
+        this.selectedElement = null;
+        return;
+      }
 
       if (this.isPanning) return;
-      if (!this.currentTool) {
-        console.log('No tool selected');
-        return;
-      }
+      if (!this.currentTool) return;
 
       const {x, y} = this.getCanvasCoords(event);
-
-      console.log('Click coordinates:', x, y);
-
       const clickedElement = this.getElementAtPosition(x, y);
 
-      if (clickedElement) {
-        console.log('Clicked on existing element - skipping canvas click');
-        return;
-      }
+      if (clickedElement) return;
 
       if (this.isConnectionTool(this.currentTool)) {
-        // ОТМЕНА СОЕДИНЕНИЯ при клике на пустое место
-        const previouslySelectedId = this.connectionStart?.id;
         this.connectionStart = null;
         this.isConnecting = false;
-
-        // Сбрасываем выделение элемента, если он был выбран как начало соединения
-        if (this.selectedElement && this.selectedElement.id === previouslySelectedId) {
+        if (this.selectedElement && this.selectedElement.id === this.connectionStart?.id) {
           this.selectedElement = null;
         }
-
-        // Также сбрасываем текущий инструмент, чтобы пользователь мог сразу выбрать другой
         this.currentTool = this.defaultToolForDiagram();
-        console.log('Clicked outside elements in connection mode - reset');
       } else {
         this.createElement(this.currentTool, x, y);
       }
     },
 
     handleElementClick(element) {
-      console.log('Element clicked:', element);
-      console.log('Current tool:', this.currentTool);
-      console.log('Is connecting:', this.isConnecting);
+      if (this.currentTool === 'delete') {
+        this.deleteElement(element);
+        return;
+      }
 
       if (this.isConnectionTool(this.currentTool)) {
         const x = element.x + element.width / 2;
         const y = element.y + element.height / 2;
-
         this.handleConnectionMode(x, y);
       } else {
         this.selectElement(element);
+      }
+    },
+
+    deleteElement(element) {
+      if (confirm(`Удалить элемент "${element.text}" и все связанные связи?`)) {
+        this.connections = this.connections.filter(
+            c => c.from !== element.id && c.to !== element.id
+        );
+        this.elements = this.elements.filter(el => el.id !== element.id);
+        if (this.selectedElement?.id === element.id) {
+          this.selectedElement = null;
+        }
       }
     },
 
@@ -662,6 +749,20 @@ export default {
     },
 
     handleMouseMove(event) {
+      // Drag bend point
+      if (this.draggingBendPoint.connId && this.draggingBendPoint.pointIndex !== null) {
+        const conn = this.connections.find(c => c.id === this.draggingBendPoint.connId);
+        if (!conn || !Array.isArray(conn.points)) return;
+
+        const { x, y } = this.getCanvasCoords(event);
+        const raw = { x: x - this.bendPointDragOffset.x, y: y - this.bendPointDragOffset.y };
+        const snapped = this.snapToGrid ? this.snapCoordinates(raw.x, raw.y) : raw;
+
+        // update in-place to keep reactivity
+        conn.points.splice(this.draggingBendPoint.pointIndex, 1, snapped);
+        return;
+      }
+
       if (this.resizingElement) {
         const {x, y} = this.getCanvasCoords(event);
         const deltaX = x - this.resizeStart.x;
@@ -713,14 +814,26 @@ export default {
       this.connections = this.connections.map(conn => {
         const fromElement = this.elements.find(el => el.id === conn.from);
         const toElement = this.elements.find(el => el.id === conn.to);
+        if (!fromElement || !toElement) return conn;
 
-        if (fromElement && toElement) {
-          return {
-            ...conn,
-            points: this.calculateConnectionPoints(fromElement, toElement)
-          };
+        const start = this.getAnchorPoint(fromElement, toElement);
+        const end = this.getAnchorPoint(toElement, fromElement);
+
+        let points = Array.isArray(conn.points) ? conn.points.slice() : [];
+        if (points.length < 2) {
+          points = [start, this.getDefaultMidpoint(start, end), end];
+        } else {
+          // update endpoints only, keep middle points as user-defined bend points
+          points[0] = start;
+          points[points.length - 1] = end;
+
+          // if a connection somehow has only 2 points, insert a midpoint so we have a bend handle
+          if (points.length === 2) {
+            points.splice(1, 0, this.getDefaultMidpoint(start, end));
+          }
         }
-        return conn;
+
+        return { ...conn, points };
       });
     },
 
@@ -911,17 +1024,17 @@ export default {
     },
 
     newDiagram() {
-      this.elements = []
-      this.connections = []
-      this.diagramName = ''
-      this.diagramType = 'class'
-      this.currentTool = this.defaultToolForDiagram()
-      this.selectedElement = null
-      this.currentDiagramId = null
-      this.selectedDiagramId = null
-      this.historyEntries = []
-      this.currentVersion = 0
-      this.pan = {x: 0, y: 0}
+      this.elements = [];
+      this.connections = [];
+      this.diagramName = '';
+      this.diagramType = 'class';
+      this.currentTool = 'select';
+      this.selectedElement = null;
+      this.currentDiagramId = null;
+      this.selectedDiagramId = null;
+      this.historyEntries = [];
+      this.currentVersion = 0;
+      this.pan = { x: 0, y: 0 };
     },
 
     async loadHistory() {
@@ -1126,13 +1239,7 @@ export default {
     },
 
     selectElement(element) {
-      console.log('Element selected:', element);
-
-      if (this.isConnecting) {
-        console.log('In connection mode - skipping selection');
-        return;
-      }
-
+      if (this.isConnecting) return;
       this.selectedElement = element;
     },
 
@@ -1148,37 +1255,65 @@ export default {
     },
 
     getCanvasCoords(event) {
-      const canvasRect = event.currentTarget.getBoundingClientRect();
+      const canvasEl = this.$el.querySelector('.canvas');
+      const canvasRect = (canvasEl || event.currentTarget).getBoundingClientRect();
       return {
         x: (event.clientX - canvasRect.left - this.pan.x) / this.zoom,
         y: (event.clientY - canvasRect.top - this.pan.y) / this.zoom
       };
     },
 
+    handleBendPointMouseDown(conn, pointIndex, event) {
+      if (!conn || !Array.isArray(conn.points)) return;
+      const pt = conn.points[pointIndex];
+      if (!pt) return;
+
+      this.draggingBendPoint = { connId: conn.id, pointIndex };
+
+      const { x, y } = this.getCanvasCoords(event);
+      this.bendPointDragOffset = { x: x - pt.x, y: y - pt.y };
+
+      // stop element dragging if any
+      this.isDragging = false;
+      this.dragElement = null;
+    },
+
+    getDefaultMidpoint(a, b) {
+      return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+    },
+
+    getConnectionPath(conn) {
+      const pts = Array.isArray(conn?.points) ? conn.points : [];
+      if (pts.length === 0) return 'M 0 0';
+      let d = `M ${pts[0].x} ${pts[0].y}`;
+      for (let i = 1; i < pts.length; i++) {
+        d += ` L ${pts[i].x} ${pts[i].y}`;
+      }
+      return d;
+    },
+
 
     createElement(type, x, y) {
-      console.log('Creating element:', type, 'at', x, y);
-
-      const uuid = this.generateUUID();
       const preset = this.getElementPreset(type);
       const width = Number(preset?.width ?? 120);
       const height = Number(preset?.height ?? 60);
       const snapped = this.snapCoordinates(x - width / 2, y - height / 2);
 
       const element = {
-        id: uuid,
+        id: this.generateUUID(),
         type: type,
         x: snapped.x,
         y: snapped.y,
         width,
         height,
         text: this.getDefaultText(type),
-        properties: {}
+        properties: {},
+        customColor: null,   // user-defined background
+        customBorder: null   // user-defined border
       };
 
-      console.log('New element:', element);
       this.elements.push(element);
-      this.selectedElement = element;
+      this.selectedElement = element; // auto-select new element
     },
 
     generateUUID() {
@@ -1210,7 +1345,8 @@ export default {
     calculateConnectionPoints(fromElement, toElement) {
       const start = this.getAnchorPoint(fromElement, toElement);
       const end = this.getAnchorPoint(toElement, fromElement);
-      return [start, end];
+      // default with one bend handle in the middle
+      return [start, this.getDefaultMidpoint(start, end), end];
     },
 
     getAnchorPoint(element, target) {
@@ -1391,7 +1527,9 @@ export default {
 }
 
 .toolbar {
-  width: 130px;
+  width: 280px;
+  min-width: 260px;
+  flex: 0 0 280px;
   background: #f4f6f8;
   padding: 0.75rem;
   border-right: 1px solid #e5e7eb;
@@ -1399,7 +1537,7 @@ export default {
   flex-direction: column;
   gap: 1rem;
   overflow-y: auto;
-  max-height: calc(100vh - 120px);
+  height: 100%;
   position: relative;
   z-index: 5;
 }
@@ -1733,6 +1871,23 @@ export default {
   margin-left: 0.5rem;
 }
 
+.connection-label-editor {
+  background: white;
+  border: 1px solid #3498db;
+  border-radius: 4px;
+  padding: 2px 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.connection-label-editor input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+  width: 140px;
+  text-align: center;
+}
+
 button.has-changes {
   background: #f39c12 !important;
   animation: pulse 1s infinite;
@@ -1743,5 +1898,92 @@ button.has-changes {
   50% { opacity: 0.7; }
   100% { opacity: 1; }
 }
+
+.properties-panel {
+  width: 280px;
+  min-width: 260px;
+  background: #f9fafb;
+  border-left: 1px solid #e5e7eb;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 12px rgba(0,0,0,0.05);
+  z-index: 10;
+}
+
+.properties-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.properties-header h3 {
+  margin: 0;
+  color: #2c3e50;
+  font-size: 1.1rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #95a5a6;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-btn:hover {
+  color: #e74c3c;
+}
+
+.properties-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.prop-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.prop-group label {
+  font-weight: 600;
+  color: #34495e;
+  font-size: 0.95rem;
+}
+
+.prop-group input[type="text"] {
+  padding: 0.6rem;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  font-size: 1rem;
+}
+
+.prop-group input[type="color"] {
+  width: 100%;
+  height: 42px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.prop-value {
+  color: #7f8c8d;
+  font-size: 0.95rem;
+}
+
+.app { height: 100vh; display: flex; flex-direction: column; }
+.header { background: #2c3e50; color: white; padding: 1.25rem 1rem 1rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; position: relative; z-index: 10; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, auto)); grid-auto-flow: column; grid-auto-columns: min-content; gap: 0.5rem; align-items: center; justify-content: start; width: 100%; overflow-x: auto; padding-bottom: 0.25rem; }
 
 </style>

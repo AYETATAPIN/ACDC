@@ -66,6 +66,7 @@ export interface DiagramConnection {
     to_block_id: string;
     type: string;
     points: Point[]; // Только массив
+    properties?: Record<string, any>;
     label?: string;
     created_at: string;
 }

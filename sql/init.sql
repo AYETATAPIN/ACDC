@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS diagram_connections (
   type TEXT NOT NULL,
   points JSONB NOT NULL DEFAULT '[]',
   label TEXT,
+  properties JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

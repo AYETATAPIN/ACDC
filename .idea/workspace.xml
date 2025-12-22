@@ -4,7 +4,12 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ed7434b9-4ade-4d51-9247-ccd3b3c2aa38" name="Changes" comment="" />
+    <list default="true" id="ed7434b9-4ade-4d51-9247-ccd3b3c2aa38" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/App.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sql/init.sql" beforeDir="false" afterPath="$PROJECT_DIR$/sql/init.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/types.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/types.ts" afterDir="false" />
+    </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -33,6 +38,31 @@
     &quot;assignee&quot;: &quot;AYETATAPIN&quot;
   }
 }</component>
+  <component name="GitToolBoxStore">
+    <option name="recentBranches">
+      <RecentBranches>
+        <option name="branchesForRepo">
+          <list>
+            <RecentBranchesForRepo>
+              <option name="branches">
+                <list>
+                  <RecentBranch>
+                    <option name="branchName" value="hotfix/bend_point" />
+                    <option name="lastUsedInstant" value="1766408841" />
+                  </RecentBranch>
+                  <RecentBranch>
+                    <option name="branchName" value="feature/bend_point" />
+                    <option name="lastUsedInstant" value="1766408840" />
+                  </RecentBranch>
+                </list>
+              </option>
+              <option name="repositoryRootUrl" value="file://$PROJECT_DIR$" />
+            </RecentBranchesForRepo>
+          </list>
+        </option>
+      </RecentBranches>
+    </option>
+  </component>
   <component name="GithubPullRequestsUISettings">{
   &quot;selectedUrlAndAccountId&quot;: {
     &quot;url&quot;: &quot;https://github.com/AYETATAPIN/ACDC&quot;,
@@ -59,7 +89,7 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;#11 on feature/bend__point&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;hotfix/bend__point&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;D:/prg/frontik/ACDC/app&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
@@ -115,6 +145,8 @@
       <workItem from="1763494274787" duration="5053000" />
       <workItem from="1765122904780" duration="4478000" />
       <workItem from="1765950752008" duration="3980000" />
+      <workItem from="1766408041323" duration="1039000" />
+      <workItem from="1766427730928" duration="4720000" />
     </task>
     <servers />
   </component>

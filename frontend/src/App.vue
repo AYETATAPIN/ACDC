@@ -217,7 +217,13 @@
               v-for="element in elements"
               :key="element.id"
               class="element"
-              :class="[{ dragging: dragElement?.id === element.id, selected: selectedElement?.id === element.id }, `shape-${getElementShape(element.type)}`]"
+              :class="[
+                  {
+                    dragging: isDragging && selectedElements.some(el => el.id === element.id),
+                    selected: selectedElements.some(el => el.id === element.id)
+                  },
+                  `shape-${getElementShape(element.type)}`
+                ]"
               :style="getElementStyle(element)"
               @click.stop="handleElementClick(element)"
           >
@@ -229,34 +235,58 @@
       </div>
 
       <!-- Unified Properties Panel (for element OR connection) -->
-      <aside class="properties-panel" v-if="selectedElement || selectedConnection">
+      <!-- Improved Properties Panel -->
+      <aside class="properties-panel" v-if="selectedElements.length === 1 || selectedConnection">
         <div class="properties-header">
-          <h3>{{ selectedElement ? 'Свойства элемента' : 'Свойства связи' }}</h3>
-          <button @click="deselectAll" class="close-btn">×</button>
+          <h3>
+            {{ selectedElements.length === 1 ? 'Свойства элемента' : 'Свойства связи' }}
+          </h3>
+          <button @click="deselectAll" class="close-btn" title="Закрыть панель">×</button>
         </div>
+
         <div class="properties-content">
           <!-- Element Properties -->
-          <template v-if="selectedElement">
+          <template v-if="selectedElements.length === 1">
             <div class="prop-group">
               <label>Текст</label>
-              <input v-model="selectedElement.text" placeholder="Введите текст" />
+              <input v-model="selectedElements[0].text" placeholder="Введите текст элемента" />
             </div>
+
             <div class="prop-group">
               <label>Размер шрифта</label>
-              <input type="range" min="10" max="30" v-model.number="selectedElement.fontSize" />
-              <span>{{ selectedElement.fontSize || 14 }}px</span>
+              <div class="range-wrapper">
+                <input type="range" min="10" max="36" step="1" v-model.number="selectedElements[0].fontSize" />
+                <span class="range-value">{{ selectedElements[0].fontSize || 14 }} px</span>
+              </div>
             </div>
+
             <div class="prop-group">
               <label>Цвет фона</label>
-              <input type="color" :value="selectedElement.customColor || getElementPreset(selectedElement.type)?.color || '#95a5a6'" @input="selectedElement.customColor = $event.target.value" />
+              <input type="color"
+                     v-model="selectedElements[0].customColor"
+                     :title="selectedElements[0].customColor || 'По умолчанию: ' + (getElementPreset(selectedElements[0].type)?.color || '#95a5a6')" />
             </div>
+
             <div class="prop-group">
               <label>Цвет границы</label>
-              <input type="color" :value="selectedElement.customBorder || getElementPreset(selectedElement.type)?.border || '#2c3e50'" @input="selectedElement.customBorder = $event.target.value" />
+              <input type="color"
+                     v-model="selectedElements[0].customBorder"
+                     :title="selectedElements[0].customBorder || 'По умолчанию: ' + (getElementPreset(selectedElements[0].type)?.border || '#2c3e50')" />
             </div>
+
             <div class="prop-group">
-              <label>Тип</label>
-              <span class="prop-value">{{ selectedElement.type }}</span>
+              <label>Ширина</label>
+              <input type="number" min="40" v-model.number="selectedElements[0].width" />
+            </div>
+
+            <div class="prop-group">
+              <label>Высота</label>
+              <input type="number" min="30" v-model.number="selectedElements[0].height" />
+            </div>
+
+            <div class="prop-group info">
+              <label>Тип элемента</label>
+              <span class="prop-value">{{ selectedElements[0].type }}</span>
             </div>
           </template>
 
@@ -264,37 +294,59 @@
           <template v-else-if="selectedConnection">
             <div class="prop-group">
               <label>Надпись</label>
-              <input v-model="selectedConnection.label" placeholder="Текст надписи" />
+              <input v-model="selectedConnection.label" placeholder="Текст на линии" />
             </div>
+
             <div class="prop-group">
               <label>Цвет надписи</label>
               <input type="color" v-model="selectedConnection.labelColor" />
             </div>
+
             <div class="prop-group">
               <label>Размер шрифта надписи</label>
-              <input type="range" min="8" max="24" step="1" v-model.number="selectedConnection.labelFontSize" />
-              <span>{{ selectedConnection.labelFontSize || 12 }}px</span>
+              <div class="range-wrapper">
+                <input type="range" min="8" max="28" step="1" v-model.number="selectedConnection.labelFontSize" />
+                <span class="range-value">{{ selectedConnection.labelFontSize || 12 }} px</span>
+              </div>
             </div>
+
             <div class="prop-group">
               <label>Цвет линии</label>
               <input type="color" v-model="selectedConnection.customColor" />
             </div>
+
             <div class="prop-group">
               <label>Стиль линии</label>
               <select v-model="selectedConnection.customDash">
                 <option value="">Сплошная</option>
-                <option value="6 4">Пунктир</option>
-                <option value="10 6">Длинный пунктир</option>
-                <option value="3 3">Точечная</option>
+                <option value="8 4">─── Пунктир</option>
+                <option value="12 6">——— Длинный пунктир</option>
+                <option value="4 4">∙∙∙∙ Точечная</option>
+                <option value="2 6">· · · Разреженная</option>
               </select>
             </div>
-            <div class="prop-group">
+
+            <div class="prop-group info">
               <label>Тип связи</label>
               <span class="prop-value">{{ selectedConnection.type }}</span>
             </div>
           </template>
         </div>
       </aside>
+
+      <!-- Optional: Info when multiple elements selected -->
+      <div v-else-if="selectedElements.length > 1" class="properties-panel multi-select-info">
+        <div class="properties-header">
+          <h3>Выбрано элементов: {{ selectedElements.length }}</h3>
+          <button @click="deselectAll" class="close-btn">×</button>
+        </div>
+        <div class="properties-content">
+          <p style="text-align: center; color: #7f8c8d; padding: 2rem 1rem;">
+            Редактирование свойств доступно только при выборе одного элемента.<br>
+            <small>Удерживайте Ctrl для множественного выбора</small>
+          </p>
+        </div>
+      </div>
 
       <!-- History panel (unchanged) -->
       <aside class="history-panel" v-if="currentDiagramId" :class="{ collapsed: historyCollapsed }">
@@ -349,7 +401,9 @@ export default {
       editingConnectionLabel: null,
       elements: [],
       connections: [],
-      selectedElement: null,
+      selectedElements: [],
+      isMultiSelecting: false,
+      dragOffsets: [],
       zoom: 1,
       currentDiagramId: null,
       diagrams: [],
@@ -384,6 +438,8 @@ export default {
     window.addEventListener('mouseup', this.handleGlobalMouseUp);
     window.addEventListener('mouseleave', this.handleGlobalMouseUp);
     window.addEventListener('keydown', this.handleKeyDown);
+    window.addEventListener('keyup', this.handleKeyUp);
+    window.addEventListener('keydown', this.handleKeyDown);
     this.loadDiagramsList();
   },
 
@@ -391,6 +447,8 @@ export default {
     window.removeEventListener('mouseup', this.handleGlobalMouseUp);
     window.removeEventListener('mouseleave', this.handleGlobalMouseUp);
     window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('keyup', this.handleKeyUp);
   },
 
   computed: {
@@ -438,6 +496,33 @@ export default {
       }
     },
 
+    handleKeyDown(event) {
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (this.selectedElements.length > 0) {
+          this.deleteSelectedElements();
+        }
+      }
+      if (event.ctrlKey || event.metaKey) {
+        this.isMultiSelecting = true;
+      }
+    },
+    handleKeyUp(event) {
+      if (event.key === 'Control' || event.key === 'Meta') {
+        this.isMultiSelecting = false;
+      }
+    },
+
+    deleteSelectedElements() {
+      if (confirm(`Delete ${this.selectedElements.length} elements?`)) {
+        const idsToDelete = this.selectedElements.map(el => el.id);
+        this.elements = this.elements.filter(el => !idsToDelete.includes(el.id));
+        this.connections = this.connections.filter(
+            conn => !idsToDelete.includes(conn.from) && !idsToDelete.includes(conn.to)
+        );
+        this.selectedElements = [];
+      }
+    },
+
     ensureToolFitsDiagram() {
       const allTools = [...this.elementToolTypes, ...this.connectionToolTypes];
       if (!allTools.includes(this.currentTool)) {
@@ -460,14 +545,6 @@ export default {
     adjustCanvasHeight(delta) {
       const next = Number(this.canvasHeight || 0) + delta;
       this.canvasHeight = Math.max(400, next);
-    },
-
-    handleKeyDown(event) {
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        if (this.selectedElement) {
-          this.deleteElement(this.selectedElement);
-        }
-      }
     },
 
     getMidPoint(conn) {
@@ -692,8 +769,22 @@ export default {
         const y = element.y + element.height / 2;
         this.handleConnectionMode(x, y);
       } else {
-        this.selectElement(element);
+        this.toggleSelectElement(element);
       }
+    },
+
+    toggleSelectElement(element) {
+      if (this.isMultiSelecting) {
+        const index = this.selectedElements.findIndex(el => el.id === element.id);
+        if (index > -1) {
+          this.selectedElements.splice(index, 1);
+        } else {
+          this.selectedElements.push(element);
+        }
+      } else {
+        this.selectedElements = [element];
+      }
+      this.selectedConnection = null;
     },
 
     deleteElement(element) {
@@ -761,27 +852,34 @@ export default {
     },
 
     handleMouseDown(event) {
-      // Middle button или Alt+ЛКМ — панорамирование холста
+      // Middle button or Alt+Left — panning
       if (event.button === 1 || event.altKey) {
         this.isPanning = true;
-        this.panStart = {...this.pan};
+        this.panStart = { ...this.pan };
         this.pointerStart = { x: event.clientX, y: event.clientY };
         return;
       }
 
-      const {x, y} = this.getCanvasCoords(event);
-
+      const { x, y } = this.getCanvasCoords(event);
       const element = this.getElementAtPosition(x, y);
 
       if (element && !this.isConnecting) {
-        this.dragElement = element;
-        this.dragOffset.x = x - element.x;
-        this.dragOffset.y = y - element.y;
+        // If clicked element is not in selection and NOT holding Ctrl → new selection
+        if (!this.isMultiSelecting && !this.selectedElements.some(el => el.id === element.id)) {
+          this.selectedElements = [element];
+        } else if (this.isMultiSelecting && !this.selectedElements.some(el => el.id === element.id)) {
+          // Add to selection if Ctrl held
+          this.selectedElements.push(element);
+        }
+
+        // Prepare drag offsets for ALL selected elements
+        this.dragOffsets = this.selectedElements.map(el => ({
+          element: el,
+          offsetX: x - el.x,
+          offsetY: y - el.y
+        }));
+
         this.isDragging = true;
-
-        this.selectedElement = element;
-
-        console.log('Start dragging:', element);
         event.preventDefault();
       }
     },
@@ -826,15 +924,14 @@ export default {
         return;
       }
 
-      if (!this.isDragging || !this.dragElement) return;
+      if (!this.isDragging || this.dragOffsets.length === 0) return;
 
       const {x, y} = this.getCanvasCoords(event);
-
-      const newX = x - this.dragOffset.x;
-      const newY = y - this.dragOffset.y;
-
-      this.moveElement(this.dragElement.id, newX, newY);
-
+      this.dragOffsets.forEach(({element, offsetX, offsetY}) => {
+        const newX = x - offsetX;
+        const newY = y - offsetY;
+        this.moveElement(element.id, newX, newY);
+      });
       this.updateConnections();
     },
 
@@ -846,6 +943,7 @@ export default {
       if (this.isPanning) {
         this.isPanning = false;
       }
+      this.dragOffsets = [];
     },
 
     updateConnections() {
@@ -1001,10 +1099,16 @@ export default {
             type: el.type,
             x: Number(el.x) || 0,
             y: Number(el.y) || 0,
-            width: Number(el.width) || 0,
-            height: Number(el.height) || 0,
-            text: el.text,
-            properties: el.properties || {}
+            width: Number(el.width) || 120,
+            height: Number(el.height) || 60,
+            text: el.text || '',
+            properties: {
+              // ← ALL CUSTOM STYLES GO HERE
+              fontSize: el.fontSize,
+              customColor: el.customColor,
+              customBorder: el.customBorder,
+              // Add more later: dashed, etc.
+            }
           })),
           connections: this.connections.map(conn => ({
             id: conn.id,
@@ -1012,7 +1116,13 @@ export default {
             to: conn.to,
             type: conn.type,
             label: conn.label || '',
-            points: conn.points || []
+            points: conn.points || [],
+            properties: {
+              customColor: conn.customColor,
+              customDash: conn.customDash,
+              labelColor: conn.labelColor,
+              labelFontSize: conn.labelFontSize
+            }
           }))
         };
 
@@ -1215,6 +1325,7 @@ export default {
 
       // Преобразуем блоки в элементы
       this.elements = (snapshot.blocks || []).map((block) => {
+        const props = block.properties || {};
         return {
           id: block.id,
           type: block.type,
@@ -1222,8 +1333,11 @@ export default {
           y: Number(block.y),
           width: Number(block.width),
           height: Number(block.height),
-          text: block.properties?.text || block.properties?.label || block.type,
-          properties: block.properties || {}
+          text: props.text || block.type,
+          fontSize: props.fontSize || 14,
+          customColor: props.customColor || null,
+          customBorder: props.customBorder || null,
+          properties: props // keep full props if needed later
         };
       });
 
@@ -1536,7 +1650,7 @@ export default {
   left: 0;
   width: 100%;
   height: 100%;
-  transform-origin: 0 0;
+  transform229-origin: 0 0;
   will-change: transform;
 }
 
@@ -1944,110 +2058,145 @@ button.has-changes {
   100% { opacity: 1; }
 }
 
+/* ============================= */
+/*     PROPERTIES PANEL STYLES   */
+/* ============================= */
+
 .properties-panel {
-  width: 280px;
-  min-width: 260px;
-  background: #f9fafb;
+  width: 340px;
+  min-width: 320px;
+  background: #ffffff;
   border-left: 1px solid #e5e7eb;
-  padding: 1rem;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  box-shadow: -4px 0 12px rgba(0,0,0,0.05);
+  box-shadow: -6px 0 20px rgba(0, 0, 0, 0.08);
   z-index: 10;
+  font-size: 0.95rem;
+  transition: width 0.2s ease;
 }
 
 .properties-header {
+  background: #2c3e50;
+  color: white;
+  padding: 1rem 1.2rem;
+  margin: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e5e7eb;
+  font-size: 1.1rem;
+  border-bottom: 3px solid #3498db;
 }
 
 .properties-header h3 {
   margin: 0;
-  color: #2c3e50;
   font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  color: white;
+  font-size: 1.8rem;
   cursor: pointer;
-  color: #95a5a6;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 0 0.4rem;
+  opacity: 0.8;
+  transition: opacity 0.2s;
 }
 
 .close-btn:hover {
-  color: #e74c3c;
+  opacity: 1;
 }
 
 .properties-content {
+  padding: 1.4rem 1.2rem;
+  flex: 1;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 1.4rem;
 }
 
 .prop-group {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
 .prop-group label {
   font-weight: 600;
-  color: #34495e;
+  color: #2c3e50;
   font-size: 0.95rem;
 }
 
-.prop-group input[type="text"] {
-  padding: 0.6rem;
+.prop-group input[type="text"],
+.prop-group input[type="number"],
+.prop-group select {
+  padding: 0.7rem 0.9rem;
   border: 1px solid #d0d7de;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 1rem;
+  transition: border 0.2s;
+}
+
+.prop-group input[type="text"]:focus,
+.prop-group input[type="number"]:focus,
+.prop-group select:focus {
+  outline: none;
+  border-color: #3498db;
+  box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);
 }
 
 .prop-group input[type="color"] {
-  width: 100%;
-  height: 42px;
+  height: 44px;
+  padding: 4px;
   border: 1px solid #d0d7de;
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
+}
+
+.range-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.range-wrapper input[type="range"] {
+  flex: 1;
+}
+
+.range-value {
+  min-width: 50px;
+  text-align: right;
+  font-family: monospace;
+  color: #3498db;
+  font-weight: 600;
+}
+
+.prop-group.info {
+  padding-top: 0.8rem;
+  border-top: 1px dashed #e5e7eb;
+  margin-top: 0.8rem;
 }
 
 .prop-value {
   color: #7f8c8d;
+  font-weight: 500;
   font-size: 0.95rem;
+}
+
+/* Multi-select info panel */
+.multi-select-info {
+  background: #f8f9fa;
+}
+
+.multi-select-info .properties-header {
+  background: #34495e;
 }
 
 .selected-connection {
   filter: drop-shadow(0 0 6px #3498db);
   stroke-width: 6 !important;
 }
-
-
-.prop-group span {
-  margin-left: 0.5rem;
-  color: #7f8c8d;
-  font-size: 0.9rem;
-}
-
-.prop-group select {
-  padding: 0.6rem;
-  border: 1px solid #d0d7de;
-  border-radius: 6px;
-  background: white;
-}
-
-.app { height: 100vh; display: flex; flex-direction: column; }
-.header { background: #2c3e50; color: white; padding: 1.25rem 1rem 1rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; position: relative; z-index: 10; }
-.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, auto)); grid-auto-flow: column; grid-auto-columns: min-content; gap: 0.5rem; align-items: center; justify-content: start; width: 100%; overflow-x: auto; padding-bottom: 0.25rem; }
-
 </style>

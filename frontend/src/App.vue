@@ -34,6 +34,12 @@
           <div style="min-width:60px;text-align:center;">{{ Math.round(zoom * 100) }}%</div>
           <button type="button" @click="adjustZoom(0.1)">+</button>
         </div>
+        <button
+            :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
+            @click="selectedBendPoint.connId ? removeSelectedBendPoint() : (selectedConnection && removeLastBendPoint(selectedConnection))"
+        >
+          Удалить точку
+        </button>
       </div>
     </header>
 
@@ -141,7 +147,7 @@
                 :marker-end="`url(#${getMarkerId(conn.type)})`"
                 fill="none"
                 style="pointer-events: stroke; cursor: pointer;"
-                @click.stop="selectConnection(conn)"
+                @click.stop="handleConnectionClick(conn, $event)"
                 @dblclick.stop="startLabelEdit(conn, $event)"
                 :class="{ 'selected-connection': selectedConnection?.id === conn.id }"
             />
@@ -170,13 +176,14 @@
                     :cx="pt.x"
                     :cy="pt.y"
                     :r="(draggingBendPoint.connId === conn.id && draggingBendPoint.pointIndex === idx) ? 8 : 6"
-                    :fill="(draggingBendPoint.connId === conn.id && draggingBendPoint.pointIndex === idx) ? '#c0392b' : '#e74c3c'"
+                    :fill="(draggingBendPoint.connId === conn.id && draggingBendPoint.pointIndex === idx) ? '#c0392b' : (selectedBendPoint.connId === conn.id && selectedBendPoint.pointIndex === idx ? '#f39c12' : '#e74c3c')"
                     stroke="#ffffff"
                     stroke-width="2"
                     style="pointer-events: all; cursor: move;"
                     @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)"
+                    @dblclick.stop.prevent="removeBendPoint(conn, idx)"
                 />
-                <circle v-if="idx > 0 && idx < (conn.points.length - 1)" :cx="pt.x" :cy="pt.y" r="14" fill="transparent" style="pointer-events: all; cursor: move;" @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)" />
+                <circle v-if="idx > 0 && idx < (conn.points.length - 1)" :cx="pt.x" :cy="pt.y" r="14" fill="transparent" style="pointer-events: all; cursor: move;" @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)" @dblclick.stop.prevent="removeBendPoint(conn, idx)" />
               </template>
             </g>
 
@@ -289,6 +296,27 @@
               </select>
             </div>
             <div class="prop-group">
+              <label>Точки изгиба</label>
+              <button class="tool-btn" @click="selectedConnection && addBendPointAtMidpoint(selectedConnection)">
+                Добавить точку
+              </button>
+              <button
+                  class="tool-btn"
+                  :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
+                  @click="selectedBendPoint.connId ? removeSelectedBendPoint() : (selectedConnection && removeLastBendPoint(selectedConnection))"
+              >
+                Удалить точку
+              </button>
+              <button
+                  class="tool-btn"
+                  :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
+                  @click="selectedConnection && clearBendPoints(selectedConnection)"
+              >
+                Удалить все точки
+              </button>
+              <span class="prop-hint">Alt/Option + клик по линии добавляет/удаляет точку рядом с кликом</span>
+            </div>
+            <div class="prop-group">
               <label>Тип связи</label>
               <span class="prop-value">{{ selectedConnection.type }}</span>
             </div>
@@ -315,6 +343,8 @@
 </template>
 
 <script>
+import { findBestSegmentIndex, toggleBendPointPoints } from './utils/bendPoints.js';
+
 export default {
   name: 'App',
   data() {
@@ -340,7 +370,8 @@ export default {
         { type: 'association', label: 'Association', color: '#34495e', diagrams: ['class', 'use_case', 'free_mode'], dash: '' },
         { type: 'inheritance', label: 'Inheritance', color: '#8e44ad', diagrams: ['class', 'free_mode'], dash: '10 6' },
         { type: 'composition', label: 'Composition', color: '#27ae60', diagrams: ['class', 'free_mode'], dash: '' },
-        { type: 'dependency', label: 'Dependency', color: '#7f8c8d', diagrams: ['class', 'free_mode'], dash: '6 4' }
+        { type: 'dependency', label: 'Dependency', color: '#7f8c8d', diagrams: ['class', 'use_case', 'free_mode'], dash: '6 4' },
+        { type: 'extend', label: 'Extend', color: '#c0392b', diagrams: ['use_case', 'free_mode'], dash: '4 4' }
       ],
       diagramName: '',
       diagramType: 'class',
@@ -377,6 +408,7 @@ export default {
       // Bend point drag
       draggingBendPoint: { connId: null, pointIndex: null },
       bendPointDragOffset: { x: 0, y: 0 },
+      selectedBendPoint: { connId: null, pointIndex: null },
 
     }
   },
@@ -463,7 +495,15 @@ export default {
     },
 
     handleKeyDown(event) {
+      const target = event.target;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)) {
+        return;
+      }
       if (event.key === 'Delete' || event.key === 'Backspace') {
+        if (this.selectedBendPoint.connId) {
+          this.removeSelectedBendPoint();
+          return;
+        }
         if (this.selectedElement) {
           this.deleteElement(this.selectedElement);
         }
@@ -859,16 +899,11 @@ export default {
 
         let points = Array.isArray(conn.points) ? conn.points.slice() : [];
         if (points.length < 2) {
-          points = [start, this.getDefaultMidpoint(start, end), end];
+          points = [start, end];
         } else {
           // update endpoints only, keep middle points as user-defined bend points
           points[0] = start;
           points[points.length - 1] = end;
-
-          // if a connection somehow has only 2 points, insert a midpoint so we have a bend handle
-          if (points.length === 2) {
-            points.splice(1, 0, this.getDefaultMidpoint(start, end));
-          }
         }
 
         return { ...conn, points };
@@ -939,7 +974,18 @@ export default {
         return this.isStructuralElement(fromElement) && this.isStructuralElement(toElement);
       }
 
-      if (['inheritance', 'composition', 'dependency'].includes(connectionType)) {
+      if (connectionType === 'extend') {
+        return this.diagramType === 'use_case' && fromElement?.type === 'usecase' && toElement?.type === 'usecase';
+      }
+
+      if (connectionType === 'dependency') {
+        if (this.diagramType === 'use_case') {
+          return this.isUseCaseElement(fromElement) && this.isUseCaseElement(toElement);
+        }
+        return this.diagramType === 'class' && this.isClassLike(fromElement) && this.isClassLike(toElement);
+      }
+
+      if (['inheritance', 'composition'].includes(connectionType)) {
         return this.diagramType === 'class' && this.isClassLike(fromElement) && this.isClassLike(toElement);
       }
 
@@ -948,7 +994,10 @@ export default {
 
     connectionRuleMessage(fromElement, toElement, connectionType) {
       if (this.diagramType === 'use_case') {
-        return 'В диаграмме вариантов использования связи допустимы только между Actor/Use Case/Note/Package.';
+        if (connectionType === 'extend') {
+          return 'Extend допустим только между Use Case.';
+        }
+        return 'В диаграмме вариантов использования допустимы Association/Dependency между Actor/Use Case/Note/Package.';
       }
 
       if (connectionType === 'association') {
@@ -971,13 +1020,16 @@ export default {
         return;
       }
 
+      const start = this.getAnchorPoint(fromElement, toElement);
+      const end = this.getAnchorPoint(toElement, fromElement);
+      const mid = this.getDefaultMidpoint(start, end);
       const connection = {
         id: this.generateId(),
         from: fromElement.id,
         to: toElement.id,
         type: this.currentTool,
         label: '',
-        points: this.calculateConnectionPoints(fromElement, toElement),
+        points: [start, mid, end],
         customColor: null,
         customDash: null,
         labelColor: '#2c3e50',
@@ -1280,16 +1332,31 @@ export default {
       if (this.isConnecting) return;
       this.selectedElement = element;
       this.selectedConnection = null; // deselect connection if any
+      this.selectedBendPoint = { connId: null, pointIndex: null };
     },
 
     selectConnection(conn) {
       this.selectedConnection = conn;
       this.selectedElement = null;
+      this.selectedBendPoint = { connId: null, pointIndex: null };
+    },
+
+    hasBendPoints(conn) {
+      return Array.isArray(conn?.points) && conn.points.length > 2;
+    },
+
+    handleConnectionClick(conn, event) {
+      if (event.altKey || event.ctrlKey || event.metaKey) {
+        this.toggleBendPoint(conn, event);
+        return;
+      }
+      this.selectConnection(conn);
     },
 
     deselectAll() {
       this.selectedElement = null;
       this.selectedConnection = null;
+      this.selectedBendPoint = { connId: null, pointIndex: null };
     },
 
     handleResizeMouseDown(element, event) {
@@ -1312,11 +1379,28 @@ export default {
       };
     },
 
+    getCanvasPointFromClient(clientX, clientY) {
+      const canvasEl = this.$el.querySelector('.canvas');
+      if (!canvasEl) return {x: 0, y: 0};
+      const rect = canvasEl.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left - this.pan.x) / this.zoom,
+        y: (clientY - rect.top - this.pan.y) / this.zoom
+      };
+    },
+
     handleBendPointMouseDown(conn, pointIndex, event) {
       if (!conn || !Array.isArray(conn.points)) return;
+      if (event.altKey || event.ctrlKey || event.metaKey) {
+        this.removeBendPoint(conn, pointIndex);
+        return;
+      }
       const pt = conn.points[pointIndex];
       if (!pt) return;
 
+      this.selectedConnection = conn;
+      this.selectedElement = null;
+      this.selectedBendPoint = { connId: conn.id, pointIndex };
       this.draggingBendPoint = { connId: conn.id, pointIndex };
 
       const { x, y } = this.getCanvasCoords(event);
@@ -1325,6 +1409,122 @@ export default {
       // stop element dragging if any
       this.isDragging = false;
       this.dragElement = null;
+    },
+
+    removeBendPoint(conn, pointIndex) {
+      if (!conn || !Array.isArray(conn.points)) return;
+      if (pointIndex <= 0 || pointIndex >= conn.points.length - 1) return;
+      const points = conn.points.slice();
+      points.splice(pointIndex, 1);
+      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points} : c);
+      if (this.selectedBendPoint.connId === conn.id) {
+        if (this.selectedBendPoint.pointIndex === pointIndex) {
+          this.selectedBendPoint = { connId: null, pointIndex: null };
+        } else if (this.selectedBendPoint.pointIndex > pointIndex) {
+          this.selectedBendPoint = {
+            connId: conn.id,
+            pointIndex: this.selectedBendPoint.pointIndex - 1
+          };
+        }
+      }
+    },
+
+    removeLastBendPoint(conn) {
+      if (!conn || !Array.isArray(conn.points)) return;
+      if (conn.points.length <= 2) return;
+      const points = conn.points.slice();
+      points.splice(points.length - 2, 1);
+      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points} : c);
+      if (this.selectedBendPoint.connId === conn.id && this.selectedBendPoint.pointIndex >= points.length - 1) {
+        this.selectedBendPoint = { connId: null, pointIndex: null };
+      }
+    },
+
+    removeSelectedBendPoint() {
+      if (!this.selectedBendPoint.connId) return;
+      const conn = this.connections.find(c => c.id === this.selectedBendPoint.connId);
+      if (!conn) return;
+      this.removeBendPoint(conn, this.selectedBendPoint.pointIndex);
+    },
+
+    normalizeConnectionPoints(conn) {
+      const fromElement = this.elements.find(el => el.id === conn.from);
+      const toElement = this.elements.find(el => el.id === conn.to);
+      if (!fromElement || !toElement) return [];
+      const start = this.getAnchorPoint(fromElement, toElement);
+      const end = this.getAnchorPoint(toElement, fromElement);
+      const middle = Array.isArray(conn.points) ? conn.points.slice(1, -1) : [];
+      return [start, ...middle, end];
+    },
+
+    addBendPoint(conn, event) {
+      const point = this.getCanvasPointFromClient(event.clientX, event.clientY);
+      const points = this.normalizeConnectionPoints(conn);
+      if (points.length < 2) return;
+      const bestIndex = findBestSegmentIndex(points, point);
+      points.splice(bestIndex + 1, 0, point);
+      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points} : c);
+    },
+
+    toggleBendPoint(conn, event) {
+      const point = this.getCanvasPointFromClient(event.clientX, event.clientY);
+      const points = this.normalizeConnectionPoints(conn);
+      if (points.length < 2) return;
+      const result = toggleBendPointPoints(points, point, this.zoom);
+      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points: result.points} : c);
+      if (this.selectedBendPoint.connId === conn.id) {
+        if (result.removedIndex !== -1) {
+          if (this.selectedBendPoint.pointIndex === result.removedIndex) {
+            this.selectedBendPoint = { connId: null, pointIndex: null };
+          } else if (this.selectedBendPoint.pointIndex > result.removedIndex) {
+            this.selectedBendPoint = {
+              connId: conn.id,
+              pointIndex: this.selectedBendPoint.pointIndex - 1
+            };
+          }
+        } else if (result.addedIndex !== -1 && this.selectedBendPoint.pointIndex >= result.addedIndex) {
+          this.selectedBendPoint = {
+            connId: conn.id,
+            pointIndex: this.selectedBendPoint.pointIndex + 1
+          };
+        }
+      }
+    },
+
+    addBendPointAtMidpoint(conn) {
+      const points = this.normalizeConnectionPoints(conn);
+      if (points.length < 2) return;
+      const segIndex = this.findLongestSegmentIndex(points);
+      const a = points[segIndex];
+      const b = points[segIndex + 1];
+      const mid = this.getDefaultMidpoint(a, b);
+      points.splice(segIndex + 1, 0, mid);
+      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points} : c);
+    },
+
+    clearBendPoints(conn) {
+      const points = this.normalizeConnectionPoints(conn);
+      if (points.length < 2) return;
+      const trimmed = [points[0], points[points.length - 1]];
+      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points: trimmed} : c);
+      if (this.selectedBendPoint.connId === conn.id) {
+        this.selectedBendPoint = { connId: null, pointIndex: null };
+      }
+    },
+
+    findLongestSegmentIndex(points) {
+      let bestIdx = 0;
+      let bestLen = -1;
+      for (let i = 0; i < points.length - 1; i++) {
+        const dx = points[i + 1].x - points[i].x;
+        const dy = points[i + 1].y - points[i].y;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        if (len > bestLen) {
+          bestLen = len;
+          bestIdx = i;
+        }
+      }
+      return bestIdx;
     },
 
     getDefaultMidpoint(a, b) {
@@ -2044,6 +2244,11 @@ button.has-changes {
   border: 1px solid #d0d7de;
   border-radius: 6px;
   background: white;
+}
+
+.prop-hint {
+  font-size: 0.75rem;
+  color: #6b7280;
 }
 
 .app { height: 100vh; display: flex; flex-direction: column; }

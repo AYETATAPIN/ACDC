@@ -4,18 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="ed7434b9-4ade-4d51-9247-ccd3b3c2aa38" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/App.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sql/init.sql" beforeDir="false" afterPath="$PROJECT_DIR$/sql/init.sql" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/repositories/diagramBlockRepository.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/repositories/diagramBlockRepository.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/repositories/diagramConnectionRepository.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/repositories/diagramConnectionRepository.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/services/diagramConnectionService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramConnectionService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/services/diagramHistoryService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramHistoryService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/services/diagramService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramService.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/types.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/types.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/utils/validators.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/validators.ts" afterDir="false" />
-    </list>
+    <list default="true" id="ed7434b9-4ade-4d51-9247-ccd3b3c2aa38" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -70,7 +59,7 @@
     &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;#11 on feature/bend__point&quot;,
     &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
     &quot;last_opened_file_path&quot;: &quot;D:/prg/frontik/ACDC/app&quot;,
     &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
@@ -125,6 +114,7 @@
       <workItem from="1763493801587" duration="433000" />
       <workItem from="1763494274787" duration="5053000" />
       <workItem from="1765122904780" duration="4478000" />
+      <workItem from="1765950752008" duration="3980000" />
     </task>
     <servers />
   </component>

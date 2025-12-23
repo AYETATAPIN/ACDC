@@ -980,19 +980,28 @@ export default {
       }
     },
 
-    handleElementClick(element) {
+    handleElementClick(element, event) {
+      // If we just finished a drag (single or multi) — ignore this click completely
+      if (this.justInteracted) {
+        return;
+      }
+
+      // PRIORITY 1: Connection tool active → handle connection, do NOT select
+      if (this.isConnectionTool(this.currentTool)) {
+        const x = element.x + element.width / 2;
+        const y = element.y + element.height / 2;
+        this.handleConnectionMode(x, y);
+        return; // Important: do not fall through to selection
+      }
+
+      // PRIORITY 2: Delete tool
       if (this.currentTool === 'delete') {
         this.deleteElement(element);
         return;
       }
 
-      if (this.isConnectionTool(this.currentTool)) {
-        const x = element.x + element.width / 2;
-        const y = element.y + element.height / 2;
-        this.handleConnectionMode(x, y);
-      } else {
-        this.selectElement(element);
-      }
+      // PRIORITY 3: Normal selection (select tool or other element tools)
+      this.selectElement(element, event);
     },
 
     deleteElement(element) {
@@ -1040,38 +1049,25 @@ export default {
     },
 
     handleConnectionMode(x, y) {
-      if (!this.isConnectionTool(this.currentTool)) {
-        return;
-      }
+      if (!this.isConnectionTool(this.currentTool)) return;
 
       const clickedElement = this.getElementAtPosition(x, y);
 
       if (!clickedElement) {
         this.connectionStart = null;
         this.isConnecting = false;
-        console.log('Clicked outside element - connection cancelled');
         return;
       }
 
       if (!this.connectionStart) {
         this.connectionStart = clickedElement;
         this.isConnecting = true;
-        console.log('First element selected:', clickedElement);
-      } else {
-        if (this.connectionStart.id !== clickedElement.id) {
-          const connType = this.currentTool;
-          if (!this.isConnectionAllowed(this.connectionStart, clickedElement, connType)) {
-            const message = this.connectionRuleMessage(this.connectionStart, clickedElement, connType);
-            this.showError(message);
-            console.warn('Connection rejected:', message);
-          } else {
-            this.createConnection(this.connectionStart, clickedElement);
-            console.log('Connection created between:', this.connectionStart, 'and', clickedElement);
-          }
+      } else if (this.connectionStart.id !== clickedElement.id) {
+        if (this.isConnectionAllowed(this.connectionStart, clickedElement, this.currentTool)) {
+          this.createConnection(this.connectionStart, clickedElement);
         } else {
-          console.log('Cannot connect element to itself');
+          this.showError(this.connectionRuleMessage(this.connectionStart, clickedElement, this.currentTool));
         }
-
         this.connectionStart = null;
         this.isConnecting = false;
       }
@@ -1100,11 +1096,17 @@ export default {
 
       // 2. Clicked on an element
       if (element && !this.isConnecting) {
-        // Check if this element is already part of current multi-selection
+        // If connection tool is active → do NOT select or start drag, let handleElementClick handle it
+        if (this.isConnectionTool(this.currentTool)) {
+          // Do nothing here — connection will be handled in handleElementClick via @click
+          return;
+        }
+
+        // Normal case: select tool or element tool → handle selection and drag
         const alreadySelected = this.selectedElements.some(el => el.id === element.id);
         const hasMultiple = this.selectedElements.length > 1;
 
-        // Case A: Multiple already selected AND we clicked on one of them → start group drag WITHOUT changing selection
+        // If clicking on already multi-selected element → start group drag without changing selection
         if (hasMultiple && alreadySelected) {
           this.isMultiSelectDragging = true;
           const center = this.getSelectionCenter();
@@ -1114,17 +1116,16 @@ export default {
           return;
         }
 
-        // Case B: Normal selection logic (single click or Shift+click to add/remove)
+        // Otherwise: normal selection logic
         this.selectElement(element, event);
 
-        // After selection logic — if now multiple selected → prepare group drag
+        // After selection — prepare drag (single or multi)
         if (this.selectedElements.length > 1) {
           this.isMultiSelectDragging = true;
           const center = this.getSelectionCenter();
           this.multiDragOffset = { x: x - center.x, y: y - center.y };
           this.justInteracted = true;
         } else {
-          // Single element drag
           this.dragElement = element;
           this.dragOffset.x = x - element.x;
           this.dragOffset.y = y - element.y;
@@ -1133,7 +1134,6 @@ export default {
         }
 
         event.preventDefault();
-        return;
       }
 
       // 3. Clicked on empty space — handled by handleCanvasClick

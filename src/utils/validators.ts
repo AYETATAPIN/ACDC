@@ -9,7 +9,7 @@ import {
   BendPointCreateInput
 } from '../types.js';
 
-const TYPES: DiagramType[] = ['class', 'use_case', 'free_mode'];
+const TYPES: DiagramType[] = ['class', 'use_case', 'activity_diagram', 'free_mode'];
 
 const isDiagramType = (value: unknown): value is DiagramType =>
   typeof value === 'string' && (TYPES as ReadonlyArray<DiagramType>).includes(value as DiagramType);
@@ -36,21 +36,28 @@ type FrontendConnection = {
 };
 
 const validateElementsInput = (value: any): FrontendElement[] | null => {
-  if (value === undefined) return null;
-  if (!Array.isArray(value)) return null;
-  const result: FrontendElement[] = [];
-  for (const el of value) {
-    if (!el || typeof el !== 'object') return null;
-    const { id, type, x, y, width, height, text, properties } = el;
-    if (typeof type !== 'string' || typeof x !== 'number' || typeof y !== 'number') return null;
-    if (width !== undefined && typeof width !== 'number') return null;
-    if (height !== undefined && typeof height !== 'number') return null;
-    if (text !== undefined && typeof text !== 'string') return null;
-    if (properties !== undefined && (typeof properties !== 'object' || properties === null)) return null;
-    if (id !== undefined && typeof id !== 'string') return null;
-    result.push({ id, type, x, y, width, height, text, properties });
-  }
-  return result;
+    if (value === undefined) return null;
+    if (!Array.isArray(value)) return null;
+    const result: FrontendElement[] = [];
+    for (const el of value) {
+        if (!el || typeof el !== 'object') return null;
+        const { id, type, x, y, width, height, text, properties } = el;
+        if (typeof type !== 'string' || typeof x !== 'number' || typeof y !== 'number') return null;
+        if (width !== undefined && typeof width !== 'number') return null;
+        if (height !== undefined && typeof height !== 'number') return null;
+        if (text !== undefined && typeof text !== 'string') return null;
+        if (properties !== undefined) {
+            if (typeof properties !== 'object' || properties === null) return null;
+            // Дополнительная валидация для классов
+            if (type === 'class') {
+                if (properties.attributes !== undefined && !Array.isArray(properties.attributes)) return null;
+                if (properties.operations !== undefined && !Array.isArray(properties.operations)) return null;
+            }
+        }
+        if (id !== undefined && typeof id !== 'string') return null;
+        result.push({ id, type, x, y, width, height, text, properties });
+    }
+    return result;
 };
 
 const validateConnectionsInput = (value: any): FrontendConnection[] | null => {

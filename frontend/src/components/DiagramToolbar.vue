@@ -1,5 +1,23 @@
 <template>
   <div class="toolbar">
+    <!-- Новая категория: Инструменты -->
+    <div class="toolbar-section" v-if="selectionTools.length > 0">
+      <h3>Инструменты</h3>
+      <div class="tool-grid">
+        <button
+          v-for="tool in selectionTools"
+          :key="tool.type"
+          class="tool-btn"
+          :class="{ active: currentTool === tool.type }"
+          @click="selectTool(tool.type)"
+        >
+          <span class="tool-label">{{ tool.label }}</span>
+          <span class="tool-hint">{{ tool.shape }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Существующая категория: Элементы -->
     <div class="toolbar-section">
       <h3>Элементы</h3>
       <div class="tool-grid">
@@ -16,6 +34,7 @@
       </div>
     </div>
 
+    <!-- Остальная часть компонента остается без изменений -->
     <div class="toolbar-section">
       <h3>Связи</h3>
       <div class="tool-grid">
@@ -35,6 +54,7 @@
       </div>
     </div>
 
+    <!-- Остальной код без изменений -->
     <div class="toolbar-section">
       <h3>Диаграммы</h3>
       <button class="tool-btn" @click="loadDiagramsList" :disabled="isLoadingList">
@@ -75,6 +95,7 @@
 export default {
   name: 'DiagramToolbar',
   props: {
+    selectionTools: { type: Array, default: () => [] }, // Новый пропс
     availableElementTools: { type: Array, default: () => [] },
     availableConnectionTools: { type: Array, default: () => [] },
     currentTool: { type: String, default: null },

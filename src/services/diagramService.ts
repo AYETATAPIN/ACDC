@@ -39,6 +39,13 @@ export class DiagramService {
         if (input.elements && Array.isArray(input.elements)) {
             for (const element of input.elements) {
                 const blockId = element.id && typeof element.id === 'string' ? element.id : uuidv4();
+                const elementProps = {
+                    text: element.text,
+                    ...(element.properties || {})
+                };
+                if (element.fontSize !== undefined) elementProps.fontSize = element.fontSize;
+                if (element.customColor !== undefined) elementProps.customColor = element.customColor;
+                if (element.customBorder !== undefined) elementProps.customBorder = element.customBorder;
                 await this.blockRepo.create(blockId, {
                     diagram_id: id,
                     type: element.type,
@@ -46,10 +53,7 @@ export class DiagramService {
                     y: Number(element.y) || 0,
                     width: Number(element.width) || 100,
                     height: Number(element.height) || 60,
-                    properties: {
-                        text: element.text,
-                        ...element.properties
-                    }
+                    properties: elementProps
                 });
             }
 
@@ -60,13 +64,21 @@ export class DiagramService {
 
                 for (const connection of input.connections) {
                     if (!blockIds.has(connection.from) || !blockIds.has(connection.to)) continue;
+                    const connectionProps = {
+                        ...(connection.properties || {})
+                    };
+                    if (connection.customColor !== undefined) connectionProps.customColor = connection.customColor;
+                    if (connection.customDash !== undefined) connectionProps.customDash = connection.customDash;
+                    if (connection.labelColor !== undefined) connectionProps.labelColor = connection.labelColor;
+                    if (connection.labelFontSize !== undefined) connectionProps.labelFontSize = connection.labelFontSize;
                     await this.connectionRepo.create(uuidv4(), {
                         diagram_id: id,
                         from_block_id: connection.from,
                         to_block_id: connection.to,
                         type: connection.type,
                         label: connection.label,
-                        points: connection.points
+                        points: connection.points,
+                        properties: connectionProps
                     });
                 }
             }
@@ -89,6 +101,13 @@ export class DiagramService {
             if (Array.isArray(input.elements)) {
                 for (const element of input.elements) {
                     const blockId = element.id && typeof element.id === 'string' ? element.id : uuidv4();
+                    const elementProps = {
+                        text: element.text,
+                        ...(element.properties || {})
+                    };
+                    if (element.fontSize !== undefined) elementProps.fontSize = element.fontSize;
+                    if (element.customColor !== undefined) elementProps.customColor = element.customColor;
+                    if (element.customBorder !== undefined) elementProps.customBorder = element.customBorder;
                     await this.blockRepo.create(blockId, {
                         diagram_id: id,
                         type: element.type,
@@ -96,10 +115,7 @@ export class DiagramService {
                         y: Number(element.y) || 0,
                         width: Number(element.width) || 100,
                         height: Number(element.height) || 60,
-                        properties: {
-                            text: element.text,
-                            ...element.properties
-                        }
+                        properties: elementProps
                     });
                 }
 
@@ -109,13 +125,21 @@ export class DiagramService {
 
                     for (const connection of input.connections) {
                         if (!blockIds.has(connection.from) || !blockIds.has(connection.to)) continue;
+                        const connectionProps = {
+                            ...(connection.properties || {})
+                        };
+                        if (connection.customColor !== undefined) connectionProps.customColor = connection.customColor;
+                        if (connection.customDash !== undefined) connectionProps.customDash = connection.customDash;
+                        if (connection.labelColor !== undefined) connectionProps.labelColor = connection.labelColor;
+                        if (connection.labelFontSize !== undefined) connectionProps.labelFontSize = connection.labelFontSize;
                         await this.connectionRepo.create(uuidv4(), {
                             diagram_id: id,
                             from_block_id: connection.from,
                             to_block_id: connection.to,
                             type: connection.type,
                             label: connection.label,
-                            points: connection.points
+                            points: connection.points,
+                            properties: connectionProps
                         });
                     }
                 }

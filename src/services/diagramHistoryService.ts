@@ -38,6 +38,20 @@ const mapDiagramRow = (row: DiagramRow): Diagram => ({
 
 const toNumber = (value: any): number => Number(value ?? 0);
 
+const parseProperties = (value: any): Record<string, any> => {
+    if (value === undefined || value === null) return {};
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return typeof parsed === 'object' && parsed !== null ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+    if (typeof value === 'object') return value;
+    return {};
+};
+
 const mapBlockRow = (row: any): DiagramBlock => ({
     id: row.id,
     diagram_id: row.diagram_id,
@@ -46,7 +60,7 @@ const mapBlockRow = (row: any): DiagramBlock => ({
     y: toNumber(row.y),
     width: toNumber(row.width),
     height: toNumber(row.height),
-    properties: row.properties ?? {},
+    properties: parseProperties(row.properties),
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
 });
@@ -69,6 +83,8 @@ const mapConnectionRow = (row: any): DiagramConnection => {
         }
     }
 
+    const properties = parseProperties(row.properties);
+
     return {
         id: row.id,
         diagram_id: row.diagram_id,
@@ -77,6 +93,7 @@ const mapConnectionRow = (row: any): DiagramConnection => {
         type: row.type,
         points,
         label: row.label,
+        properties,
         created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     };
 };
@@ -256,7 +273,7 @@ export class DiagramHistoryService {
             [diagramRow.id]
         );
         const connectionsRes = await client.query(
-            `SELECT id, diagram_id, from_block_id, to_block_id, type, points, label, created_at
+            `SELECT id, diagram_id, from_block_id, to_block_id, type, points, label, properties, created_at
              FROM diagram_connections WHERE diagram_id = $1 ORDER BY created_at`,
             [diagramRow.id]
         );
@@ -319,9 +336,11 @@ export class DiagramHistoryService {
                 }
             }
 
+            const propertiesJson = JSON.stringify(connection.properties || {});
+
             await client.query(
-                `INSERT INTO diagram_connections (id, diagram_id, from_block_id, to_block_id, type, points, label, created_at)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                `INSERT INTO diagram_connections (id, diagram_id, from_block_id, to_block_id, type, points, label, properties, created_at)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
                 [
                     connection.id,
                     connection.diagram_id,
@@ -330,6 +349,7 @@ export class DiagramHistoryService {
                     connection.type,
                     pointsJson,
                     connection.label || null,
+                    propertiesJson,
                     connection.created_at,
                 ]
             );

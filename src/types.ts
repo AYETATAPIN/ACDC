@@ -67,6 +67,7 @@ export interface DiagramConnection {
     type: string;
     points: Point[]; // Только массив
     label?: string;
+    properties: Record<string, any>;
     created_at: string;
 }
 
@@ -77,12 +78,14 @@ export interface DiagramConnectionCreateInput {
     type: string;
     points?: Point[]; // Только массив
     label?: string;
+    properties?: Record<string, any>;
 }
 
 
 export interface DiagramConnectionUpdateInput {
     label?: string;
     points?: Point[]; // Только массив
+    properties?: Record<string, any>;
 }
 
 export interface BendPointCreateInput {

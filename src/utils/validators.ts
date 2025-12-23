@@ -32,6 +32,7 @@ type FrontendConnection = {
   type: string;
   label?: string;
   points?: Array<{ x: number; y: number }>;
+  properties?: Record<string, any>;
 };
 
 const validateElementsInput = (value: any): FrontendElement[] | null => {
@@ -58,10 +59,11 @@ const validateConnectionsInput = (value: any): FrontendConnection[] | null => {
   const result: FrontendConnection[] = [];
   for (const conn of value) {
     if (!conn || typeof conn !== 'object') return null;
-    const { id, from, to, type, label, points } = conn;
+    const { id, from, to, type, label, points, properties } = conn;
     if (typeof from !== 'string' || typeof to !== 'string' || typeof type !== 'string') return null;
     if (id !== undefined && typeof id !== 'string') return null;
     if (label !== undefined && typeof label !== 'string') return null;
+    if (properties !== undefined && (typeof properties !== 'object' || properties === null)) return null;
     if (points !== undefined) {
       if (!Array.isArray(points)) return null;
       for (const p of points) {
@@ -69,7 +71,7 @@ const validateConnectionsInput = (value: any): FrontendConnection[] | null => {
         if (typeof p.x !== 'number' || typeof p.y !== 'number') return null;
       }
     }
-    result.push({ id, from, to, type, label, points });
+    result.push({ id, from, to, type, label, points, properties });
   }
   return result;
 };
@@ -187,7 +189,7 @@ export const validateBlockUpdate = (body: any): { ok: true; data: DiagramBlockUp
 
 export const validateConnectionCreate = (body: any): { ok: true; data: DiagramConnectionCreateInput } | { ok: false; error: string } => {
     if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
-    const { diagram_id, from_block_id, to_block_id, type, points, label } = body;
+    const { diagram_id, from_block_id, to_block_id, type, points, label, properties } = body;
 
     if (typeof diagram_id !== 'string' || !diagram_id.trim()) return { ok: false, error: 'diagram_id is required' };
     if (typeof from_block_id !== 'string' || !from_block_id.trim()) return { ok: false, error: 'from_block_id is required' };
@@ -224,13 +226,20 @@ export const validateConnectionCreate = (body: any): { ok: true; data: DiagramCo
         data.label = label;
     }
 
+    if (properties !== undefined) {
+        if (typeof properties !== 'object' || properties === null) {
+            return { ok: false, error: 'properties must be an object' };
+        }
+        data.properties = properties;
+    }
+
     return { ok: true, data };
 };
 
 
 export const validateConnectionUpdate = (body: any): { ok: true; data: DiagramConnectionUpdateInput } | { ok: false; error: string } => {
     if (!body || typeof body !== 'object') return { ok: false, error: 'Body must be an object' };
-    const { label, points } = body;
+    const { label, points, properties } = body;
     const out: DiagramConnectionUpdateInput = {};
 
     if (label !== undefined) {
@@ -253,6 +262,11 @@ export const validateConnectionUpdate = (body: any): { ok: true; data: DiagramCo
             }
         }
         out.points = points;
+    }
+
+    if (properties !== undefined) {
+        if (typeof properties !== 'object' || properties === null) return { ok: false, error: 'properties must be an object' };
+        out.properties = properties;
     }
 
     if (Object.keys(out).length === 0) return { ok: false, error: 'At least one field must be provided' };

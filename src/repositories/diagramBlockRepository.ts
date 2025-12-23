@@ -3,6 +3,20 @@ import {DiagramBlock, DiagramBlockCreateInput, DiagramBlockUpdateInput} from '..
 
 const toNumber = (value: any): number => Number(value ?? 0);
 
+const parseProperties = (value: any): Record<string, any> => {
+    if (value === undefined || value === null) return {};
+    if (typeof value === 'string') {
+        try {
+            const parsed = JSON.parse(value);
+            return typeof parsed === 'object' && parsed !== null ? parsed : {};
+        } catch {
+            return {};
+        }
+    }
+    if (typeof value === 'object') return value;
+    return {};
+};
+
 const mapBlockRow = (row: any): DiagramBlock => ({
     id: row.id,
     diagram_id: row.diagram_id,
@@ -11,7 +25,7 @@ const mapBlockRow = (row: any): DiagramBlock => ({
     y: toNumber(row.y),
     width: toNumber(row.width),
     height: toNumber(row.height),
-    properties: row.properties ?? {},
+    properties: parseProperties(row.properties),
     created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
 });

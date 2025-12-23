@@ -1,47 +1,32 @@
 <template>
   <div class="app">
-    <header class="header">
-      <div class="logo-placeholder"></div>
-      <div class="controls">
-        <input v-model="diagramName" placeholder="Diagram name">
-        <select v-model="diagramType">
-          <option value="class">Class</option>
-          <option value="use_case">Use Case</option>
-          <option value="free_mode">Free Mode</option>
-        </select>
-        <button
-            @click="snapToGrid = !snapToGrid"
-            :class="{ active: snapToGrid }"
-            :title="snapToGrid ? 'Привязка к сетке: ВКЛ' : 'Привязка к сетке: ВЫКЛ'"
-        >
-          {{ snapToGrid ? '📐 Сетка: ВКЛ' : '📏 Сетка: ВЫКЛ' }}
-        </button>
-        <button @click="saveDiagram" :class="{ 'has-changes': hasUnsavedChanges }">
-          {{ hasUnsavedChanges ? '💾 Save*' : '💾 Save' }}
-        </button>
-        <button @click="newDiagram">New</button>
-        <button :disabled="!currentDiagramId" @click="undoDiagram">Undo</button>
-        <button :disabled="!currentDiagramId" @click="redoDiagram">Redo</button>
-        <select v-model="selectedDiagramId" @change="selectedDiagramId && loadDiagram(selectedDiagramId)" class="diagram-select">
-          <option value="" disabled>Выбрать диаграмму...</option>
-          <option v-for="d in diagrams" :key="d.id" :value="d.id">
-            {{ d.name }} ({{ d.type }})
-          </option>
-        </select>
-        <button @click="loadDiagramsList" :disabled="isLoadingList">↻</button>
-        <div class="canvas-size-controls">
-          <button type="button" @click="adjustZoom(-0.1)">−</button>
-          <div style="min-width:60px;text-align:center;">{{ Math.round(zoom * 100) }}%</div>
-          <button type="button" @click="adjustZoom(0.1)">+</button>
-        </div>
-        <button
-            :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
-            @click="selectedBendPoint.connId ? removeSelectedBendPoint() : (selectedConnection && removeLastBendPoint(selectedConnection))"
-        >
-          Удалить точку
-        </button>
-      </div>
-    </header>
+    <DiagramHeader
+      :diagram-name="diagramName"
+      :diagram-type="diagramType"
+      :snap-to-grid="snapToGrid"
+      :has-unsaved-changes="hasUnsavedChanges"
+      :current-diagram-id="currentDiagramId"
+      :selected-diagram-id="selectedDiagramId"
+      :diagrams="diagrams"
+      :is-loading-list="isLoadingList"
+      :zoom="zoom"
+      :selected-connection="selectedConnection"
+      :selected-bend-point="selectedBendPoint"
+      :has-bend-points="hasBendPoints"
+      :set-diagram-name="setDiagramName"
+      :set-diagram-type="setDiagramType"
+      :set-selected-diagram-id="setSelectedDiagramId"
+      :toggle-grid="toggleGrid"
+      :save-diagram="saveDiagram"
+      :new-diagram="newDiagram"
+      :undo-diagram="undoDiagram"
+      :redo-diagram="redoDiagram"
+      :load-diagram="loadDiagram"
+      :load-diagrams-list="loadDiagramsList"
+      :adjust-zoom="adjustZoom"
+      :remove-selected-bend-point="removeSelectedBendPoint"
+      :remove-last-bend-point="removeLastBendPoint"
+    />
 
     <div v-if="errorMessage" class="error-toast">
       <div class="error-content">
@@ -51,77 +36,23 @@
     </div>
 
     <div class="main">
-      <div class="toolbar">
-        <!-- Toolbar content unchanged -->
-        <div class="toolbar-section">
-          <h3>Элементы</h3>
-          <div class="tool-grid">
-            <button
-                v-for="tool in availableElementTools"
-                :key="tool.type"
-                class="tool-btn"
-                :class="{ active: currentTool === tool.type }"
-                @click="selectTool(tool.type)"
-            >
-              <span class="tool-label">{{ tool.label }}</span>
-              <span class="tool-hint">{{ tool.shape }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="toolbar-section">
-          <h3>Связи</h3>
-          <div class="tool-grid">
-            <button
-                v-for="tool in availableConnectionTools"
-                :key="tool.type"
-                class="tool-btn connection-btn"
-                :class="{ active: currentTool === tool.type }"
-                @click="selectTool(tool.type)"
-            >
-              <span class="tool-label">{{ tool.label }}</span>
-              <span class="tool-hint" :style="{ color: getConnectionColor(tool.type) }">{{ tool.type }}</span>
-            </button>
-            <div v-if="availableConnectionTools.length === 0" class="empty-tools">
-              Связи недоступны для текущего типа диаграммы
-            </div>
-          </div>
-        </div>
-
-        <div class="toolbar-section">
-          <h3>Диаграммы</h3>
-          <button class="tool-btn" @click="loadDiagramsList" :disabled="isLoadingList">
-            {{ isLoadingList ? 'Загрузка...' : 'Обновить список' }}
-          </button>
-          <div class="diagram-list">
-            <div
-                v-for="item in diagrams"
-                :key="item.id"
-                class="diagram-item"
-                :class="{ active: currentDiagramId === item.id }"
-                @click="loadDiagram(item.id)"
-            >
-              <div class="diagram-title">{{ item.name }}</div>
-              <div class="diagram-meta">
-                <span class="badge small">{{ item.type }}</span>
-                <span class="diagram-date">{{ formatDate(item.created_at) }}</span>
-              </div>
-            </div>
-            <div v-if="!isLoadingList && diagrams.length === 0" class="empty-tools">
-              Нет сохранённых диаграмм
-            </div>
-          </div>
-        </div>
-
-        <div class="debug-panel">
-          <p><strong>Отладка:</strong></p>
-          <p>Инструмент: {{ currentTool || 'none' }}</p>
-          <p>Элементов: {{ elements.length }}</p>
-          <p>Связей: {{ connections.length }}</p>
-          <p v-if="isConnecting" class="debug-badge warn">Режим связи: выберите второй элемент</p>
-          <p v-if="isDragging" class="debug-badge ok">Перемещение элемента</p>
-        </div>
-      </div>
+      <DiagramToolbar
+        :available-element-tools="availableElementTools"
+        :available-connection-tools="availableConnectionTools"
+        :current-tool="currentTool"
+        :select-tool="selectTool"
+        :diagrams="diagrams"
+        :current-diagram-id="currentDiagramId"
+        :is-loading-list="isLoadingList"
+        :load-diagrams-list="loadDiagramsList"
+        :load-diagram="loadDiagram"
+        :format-date="formatDate"
+        :get-connection-color="getConnectionColor"
+        :elements-count="elements.length"
+        :connections-count="connections.length"
+        :is-connecting="isConnecting"
+        :is-dragging="isDragging"
+      />
 
       <div class="canvas"
            :style="{ background: snapToGrid ? 'linear-gradient(90deg, #f0f0f0 1px, transparent 1px), linear-gradient(#f0f0f0 1px, transparent 1px)' : 'white',
@@ -144,7 +75,7 @@
                 :stroke="conn.customColor || getConnectionColor(conn.type)"
                 stroke-width="4"
                 :stroke-dasharray="conn.customDash || getConnectionDash(conn.type) || null"
-                :marker-end="`url(#${getMarkerId(conn.type)})`"
+                :marker-end="`url(#${getMarkerId(conn)})`"
                 fill="none"
                 style="pointer-events: stroke; cursor: pointer;"
                 @click.stop="handleConnectionClick(conn, $event)"
@@ -188,11 +119,36 @@
             </g>
 
             <defs>
-              <marker v-for="preset in connectionPresets" :key="preset.type" :id="`arrow-${preset.type}`" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" :fill="getConnectionColor(preset.type)" />
+              <marker
+                v-for="conn in connections"
+                :key="`arrow-${conn.id}`"
+                :id="`arrow-${conn.id}`"
+                markerWidth="12"
+                markerHeight="12"
+                refX="12"
+                refY="6"
+                orient="auto"
+                markerUnits="strokeWidth"
+                viewBox="0 0 12 12"
+              >
+                <polygon
+                  points="0 0, 12 6, 0 12"
+                  :fill="conn.customColor || getConnectionColor(conn.type)"
+                  :stroke="conn.customColor || getConnectionColor(conn.type)"
+                  stroke-width="0"
+                />
               </marker>
-              <marker id="arrow-default" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" :fill="getConnectionColor('association')" />
+              <marker
+                id="arrow-default"
+                markerWidth="12"
+                markerHeight="12"
+                refX="12"
+                refY="6"
+                orient="auto"
+                markerUnits="strokeWidth"
+                viewBox="0 0 12 12"
+              >
+                <polygon points="0 0, 12 6, 0 12" :fill="getConnectionColor('association')" :stroke="getConnectionColor('association')" stroke-width="0" />
               </marker>
             </defs>
           </svg>
@@ -235,118 +191,46 @@
         </div>
       </div>
 
-      <!-- Unified Properties Panel (for element OR connection) -->
-      <aside class="properties-panel" v-if="selectedElement || selectedConnection">
-        <div class="properties-header">
-          <h3>{{ selectedElement ? 'Свойства элемента' : 'Свойства связи' }}</h3>
-          <button @click="deselectAll" class="close-btn">×</button>
-        </div>
-        <div class="properties-content">
-          <!-- Element Properties -->
-          <template v-if="selectedElement">
-            <div class="prop-group">
-              <label>Текст</label>
-              <input v-model="selectedElement.text" placeholder="Введите текст" />
-            </div>
-            <div class="prop-group">
-              <label>Размер шрифта</label>
-              <input type="range" min="10" max="30" v-model.number="selectedElement.fontSize" />
-              <span>{{ selectedElement.fontSize || 14 }}px</span>
-            </div>
-            <div class="prop-group">
-              <label>Цвет фона</label>
-              <input type="color" :value="selectedElement.customColor || getElementPreset(selectedElement.type)?.color || '#95a5a6'" @input="selectedElement.customColor = $event.target.value" />
-            </div>
-            <div class="prop-group">
-              <label>Цвет границы</label>
-              <input type="color" :value="selectedElement.customBorder || getElementPreset(selectedElement.type)?.border || '#2c3e50'" @input="selectedElement.customBorder = $event.target.value" />
-            </div>
-            <div class="prop-group">
-              <label>Тип</label>
-              <span class="prop-value">{{ selectedElement.type }}</span>
-            </div>
-          </template>
+      <DiagramPropertiesPanel
+        :selected-element="selectedElement"
+        :selected-connection="selectedConnection"
+        :selected-bend-point="selectedBendPoint"
+        :get-element-preset="getElementPreset"
+        :deselect-all="deselectAll"
+        :add-bend-point-at-midpoint="addBendPointAtMidpoint"
+        :has-bend-points="hasBendPoints"
+        :clear-bend-points="clearBendPoints"
+        :remove-selected-bend-point="removeSelectedBendPoint"
+        :remove-last-bend-point="removeLastBendPoint"
+      />
 
-          <!-- Connection Properties -->
-          <template v-else-if="selectedConnection">
-            <div class="prop-group">
-              <label>Надпись</label>
-              <input v-model="selectedConnection.label" placeholder="Текст надписи" />
-            </div>
-            <div class="prop-group">
-              <label>Цвет надписи</label>
-              <input type="color" v-model="selectedConnection.labelColor" />
-            </div>
-            <div class="prop-group">
-              <label>Размер шрифта надписи</label>
-              <input type="range" min="8" max="24" step="1" v-model.number="selectedConnection.labelFontSize" />
-              <span>{{ selectedConnection.labelFontSize || 12 }}px</span>
-            </div>
-            <div class="prop-group">
-              <label>Цвет линии</label>
-              <input type="color" v-model="selectedConnection.customColor" />
-            </div>
-            <div class="prop-group">
-              <label>Стиль линии</label>
-              <select v-model="selectedConnection.customDash">
-                <option value="">Сплошная</option>
-                <option value="6 4">Пунктир</option>
-                <option value="10 6">Длинный пунктир</option>
-                <option value="3 3">Точечная</option>
-              </select>
-            </div>
-            <div class="prop-group">
-              <label>Точки изгиба</label>
-              <button class="tool-btn" @click="selectedConnection && addBendPointAtMidpoint(selectedConnection)">
-                Добавить точку
-              </button>
-              <button
-                  class="tool-btn"
-                  :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
-                  @click="selectedBendPoint.connId ? removeSelectedBendPoint() : (selectedConnection && removeLastBendPoint(selectedConnection))"
-              >
-                Удалить точку
-              </button>
-              <button
-                  class="tool-btn"
-                  :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
-                  @click="selectedConnection && clearBendPoints(selectedConnection)"
-              >
-                Удалить все точки
-              </button>
-              <span class="prop-hint">Alt/Option + клик по линии добавляет/удаляет точку рядом с кликом</span>
-            </div>
-            <div class="prop-group">
-              <label>Тип связи</label>
-              <span class="prop-value">{{ selectedConnection.type }}</span>
-            </div>
-          </template>
-        </div>
-      </aside>
-
-      <!-- History panel (unchanged) -->
-      <aside class="history-panel" v-if="currentDiagramId" :class="{ collapsed: historyCollapsed }">
-        <div class="history-header" @click="historyCollapsed = !historyCollapsed">
-          <h3>History</h3>
-          <button class="collapse-btn">{{ historyCollapsed ? '▼' : '▲' }}</button>
-        </div>
-        <div v-if="!historyCollapsed">
-          <div v-if="historyEntries.length === 0" class="empty">No snapshots yet</div>
-          <div v-for="entry in historyEntries" :key="entry.version" class="history-row" :class="{ active: entry.version === currentVersion }">
-            <div class="version">v{{ entry.version }}</div>
-            <div class="time">{{ formatDate(entry.created_at) }}</div>
-          </div>
-        </div>
-      </aside>
+      <DiagramHistoryPanel
+        v-if="currentDiagramId"
+        :history-entries="historyEntries"
+        :current-version="currentVersion"
+        :history-collapsed="historyCollapsed"
+        :format-date="formatDate"
+        :toggle-history="toggleHistoryCollapsed"
+      />
     </div>
   </div>
 </template>
 
 <script>
 import { findBestSegmentIndex, toggleBendPointPoints } from './utils/bendPoints.js';
+import DiagramHeader from './components/DiagramHeader.vue';
+import DiagramToolbar from './components/DiagramToolbar.vue';
+import DiagramPropertiesPanel from './components/DiagramPropertiesPanel.vue';
+import DiagramHistoryPanel from './components/DiagramHistoryPanel.vue';
 
 export default {
   name: 'App',
+  components: {
+    DiagramHeader,
+    DiagramToolbar,
+    DiagramPropertiesPanel,
+    DiagramHistoryPanel
+  },
   data() {
     return {
       lastSavedState: null,
@@ -456,6 +340,42 @@ export default {
   },
 
   methods: {
+    setElements(nextElements) {
+      this.elements = nextElements;
+      if (this.selectedElement) {
+        const updated = nextElements.find(el => el.id === this.selectedElement.id);
+        this.selectedElement = updated || null;
+      }
+    },
+
+    setConnections(nextConnections) {
+      this.connections = nextConnections;
+      if (this.selectedConnection) {
+        const updated = nextConnections.find(conn => conn.id === this.selectedConnection.id);
+        this.selectedConnection = updated || null;
+      }
+    },
+
+    setDiagramName(value) {
+      this.diagramName = value;
+    },
+
+    setDiagramType(value) {
+      this.diagramType = value;
+    },
+
+    setSelectedDiagramId(value) {
+      this.selectedDiagramId = value;
+    },
+
+    toggleGrid() {
+      this.snapToGrid = !this.snapToGrid;
+    },
+
+    toggleHistoryCollapsed() {
+      this.historyCollapsed = !this.historyCollapsed;
+    },
+
     checkForChanges() {
       const currentState = {
         elements: this.elements,
@@ -585,10 +505,10 @@ export default {
 
     alignElementsToGrid() {
       if (!this.snapToGrid) return;
-      this.elements = this.elements.map(el => {
+      this.setElements(this.elements.map(el => {
         const snapped = this.snapCoordinates(el.x, el.y);
         return {...el, x: snapped.x, y: snapped.y};
-      });
+      }));
       this.updateConnections();
     },
 
@@ -738,10 +658,10 @@ export default {
 
     deleteElement(element) {
       if (confirm(`Удалить элемент "${element.text}" и все связанные связи?`)) {
-        this.connections = this.connections.filter(
+        this.setConnections(this.connections.filter(
             c => c.from !== element.id && c.to !== element.id
-        );
-        this.elements = this.elements.filter(el => el.id !== element.id);
+        ));
+        this.setElements(this.elements.filter(el => el.id !== element.id));
         if (this.selectedElement?.id === element.id) {
           this.selectedElement = null;
         }
@@ -758,8 +678,8 @@ export default {
       return preset?.dash || '';
     },
 
-    getMarkerId(connectionType) {
-      return this.connectionPresets.some(p => p.type === connectionType) ? `arrow-${connectionType}` : 'arrow-default';
+    getMarkerId(conn) {
+      return conn?.id ? `arrow-${conn.id}` : 'arrow-default';
     },
 
     handleConnectionMode(x, y) {
@@ -889,7 +809,7 @@ export default {
     },
 
     updateConnections() {
-      this.connections = this.connections.map(conn => {
+      this.setConnections(this.connections.map(conn => {
         const fromElement = this.elements.find(el => el.id === conn.from);
         const toElement = this.elements.find(el => el.id === conn.to);
         if (!fromElement || !toElement) return conn;
@@ -907,7 +827,7 @@ export default {
         }
 
         return { ...conn, points };
-      });
+      }));
     },
 
     moveElement(elementId, newX, newY) {
@@ -1056,7 +976,12 @@ export default {
             width: Number(el.width) || 0,
             height: Number(el.height) || 0,
             text: el.text,
-            properties: el.properties || {}
+            properties: {
+              ...(el.properties || {}),
+              fontSize: el.fontSize ?? 14,
+              customColor: el.customColor ?? null,
+              customBorder: el.customBorder ?? null
+            }
           })),
           connections: this.connections.map(conn => ({
             id: conn.id,
@@ -1064,7 +989,13 @@ export default {
             to: conn.to,
             type: conn.type,
             label: conn.label || '',
-            points: conn.points || []
+            points: conn.points || [],
+            properties: {
+              customColor: conn.customColor ?? null,
+              customDash: conn.customDash ?? null,
+              labelColor: conn.labelColor ?? '#2c3e50',
+              labelFontSize: conn.labelFontSize ?? 12
+            }
           }))
         };
 
@@ -1114,8 +1045,8 @@ export default {
     },
 
     newDiagram() {
-      this.elements = [];
-      this.connections = [];
+      this.setElements([]);
+      this.setConnections([]);
       this.diagramName = '';
       this.diagramType = 'class';
       this.currentTool = 'select';
@@ -1266,7 +1197,20 @@ export default {
       this.diagramType = snapshot.diagram?.type || this.diagramType;
 
       // Преобразуем блоки в элементы
-      this.elements = (snapshot.blocks || []).map((block) => {
+      this.setElements((snapshot.blocks || []).map((block) => {
+        const props = (() => {
+          if (!block || block.properties === undefined || block.properties === null) return {};
+          if (typeof block.properties === 'string') {
+            try {
+              const parsed = JSON.parse(block.properties);
+              return typeof parsed === 'object' && parsed !== null ? parsed : {};
+            } catch {
+              return {};
+            }
+          }
+          if (typeof block.properties === 'object') return block.properties;
+          return {};
+        })();
         return {
           id: block.id,
           type: block.type,
@@ -1274,13 +1218,29 @@ export default {
           y: Number(block.y),
           width: Number(block.width),
           height: Number(block.height),
-          text: block.properties?.text || block.properties?.label || block.type,
-          properties: block.properties || {}
+          text: props.text || props.label || block.type,
+          fontSize: Number(props.fontSize) || 14,
+          customColor: props.customColor ?? null,
+          customBorder: props.customBorder ?? null,
+          properties: props
         };
-      });
+      }));
 
       // Преобразуем connections
-      this.connections = (snapshot.connections || []).map((conn) => {
+      this.setConnections((snapshot.connections || []).map((conn) => {
+        const props = (() => {
+          if (!conn || conn.properties === undefined || conn.properties === null) return {};
+          if (typeof conn.properties === 'string') {
+            try {
+              const parsed = JSON.parse(conn.properties);
+              return typeof parsed === 'object' && parsed !== null ? parsed : {};
+            } catch {
+              return {};
+            }
+          }
+          if (typeof conn.properties === 'object') return conn.properties;
+          return {};
+        })();
         // Обрабатываем points
         let points = [];
         if (conn.points) {
@@ -1311,9 +1271,14 @@ export default {
           to: conn.to_block_id,
           type: conn.type,
           label: conn.label || '',
-          points: points
+          points: points,
+          customColor: props.customColor ?? null,
+          customDash: props.customDash ?? null,
+          labelColor: props.labelColor ?? '#2c3e50',
+          labelFontSize: Number(props.labelFontSize) || 12,
+          properties: props
         };
-      });
+      }));
 
       // Сбрасываем выделение
       this.selectedElement = null;
@@ -1416,7 +1381,7 @@ export default {
       if (pointIndex <= 0 || pointIndex >= conn.points.length - 1) return;
       const points = conn.points.slice();
       points.splice(pointIndex, 1);
-      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points} : c);
+      this.setConnections(this.connections.map(c => c.id === conn.id ? {...c, points} : c));
       if (this.selectedBendPoint.connId === conn.id) {
         if (this.selectedBendPoint.pointIndex === pointIndex) {
           this.selectedBendPoint = { connId: null, pointIndex: null };
@@ -1434,7 +1399,7 @@ export default {
       if (conn.points.length <= 2) return;
       const points = conn.points.slice();
       points.splice(points.length - 2, 1);
-      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points} : c);
+      this.setConnections(this.connections.map(c => c.id === conn.id ? {...c, points} : c));
       if (this.selectedBendPoint.connId === conn.id && this.selectedBendPoint.pointIndex >= points.length - 1) {
         this.selectedBendPoint = { connId: null, pointIndex: null };
       }
@@ -1463,7 +1428,7 @@ export default {
       if (points.length < 2) return;
       const bestIndex = findBestSegmentIndex(points, point);
       points.splice(bestIndex + 1, 0, point);
-      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points} : c);
+      this.setConnections(this.connections.map(c => c.id === conn.id ? {...c, points} : c));
     },
 
     toggleBendPoint(conn, event) {
@@ -1471,7 +1436,7 @@ export default {
       const points = this.normalizeConnectionPoints(conn);
       if (points.length < 2) return;
       const result = toggleBendPointPoints(points, point, this.zoom);
-      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points: result.points} : c);
+      this.setConnections(this.connections.map(c => c.id === conn.id ? {...c, points: result.points} : c));
       if (this.selectedBendPoint.connId === conn.id) {
         if (result.removedIndex !== -1) {
           if (this.selectedBendPoint.pointIndex === result.removedIndex) {
@@ -1499,14 +1464,14 @@ export default {
       const b = points[segIndex + 1];
       const mid = this.getDefaultMidpoint(a, b);
       points.splice(segIndex + 1, 0, mid);
-      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points} : c);
+      this.setConnections(this.connections.map(c => c.id === conn.id ? {...c, points} : c));
     },
 
     clearBendPoints(conn) {
       const points = this.normalizeConnectionPoints(conn);
       if (points.length < 2) return;
       const trimmed = [points[0], points[points.length - 1]];
-      this.connections = this.connections.map(c => c.id === conn.id ? {...c, points: trimmed} : c);
+      this.setConnections(this.connections.map(c => c.id === conn.id ? {...c, points: trimmed} : c));
       if (this.selectedBendPoint.connId === conn.id) {
         this.selectedBendPoint = { connId: null, pointIndex: null };
       }

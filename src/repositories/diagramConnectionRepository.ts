@@ -20,6 +20,20 @@ const mapConnectionRow = (row: any): DiagramConnection => {
         }
     }
 
+    const properties = (() => {
+        if (row.properties === undefined || row.properties === null) return {};
+        if (typeof row.properties === 'string') {
+            try {
+                const parsed = JSON.parse(row.properties);
+                return typeof parsed === 'object' && parsed !== null ? parsed : {};
+            } catch {
+                return {};
+            }
+        }
+        if (typeof row.properties === 'object') return row.properties;
+        return {};
+    })();
+
     return {
         id: row.id,
         diagram_id: row.diagram_id,
@@ -28,6 +42,7 @@ const mapConnectionRow = (row: any): DiagramConnection => {
         type: row.type,
         points: points, // Теперь это всегда массив
         label: row.label,
+        properties,
         created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     };
 };
@@ -75,6 +90,11 @@ export class DiagramConnectionRepository {
             values.push(pointsJson);
         }
 
+        if (input.properties !== undefined) {
+            fields.push(`properties = $${idx++}`);
+            values.push(JSON.stringify(input.properties));
+        }
+
         if (fields.length === 0) return null;
 
         const query = `UPDATE diagram_connections SET ${fields.join(', ')} WHERE id = $${idx} RETURNING *`;
@@ -111,12 +131,14 @@ export class DiagramConnectionRepository {
             }
         }
 
+        const propertiesJson = JSON.stringify(input.properties || {});
+
         const res = await this.pool.query(
-            `INSERT INTO diagram_connections (id, diagram_id, from_block_id, to_block_id, type, points, label)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `INSERT INTO diagram_connections (id, diagram_id, from_block_id, to_block_id, type, points, label, properties)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                  RETURNING *`,
             [id, input.diagram_id, input.from_block_id, input.to_block_id, input.type,
-                pointsJson, input.label || null]
+                pointsJson, input.label || null, propertiesJson]
         );
         return mapConnectionRow(res.rows[0]);
     }

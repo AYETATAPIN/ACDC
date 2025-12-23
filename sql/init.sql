@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS diagram_connections (
   to_block_id UUID NOT NULL REFERENCES diagram_blocks(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
   points JSONB NOT NULL DEFAULT '[]',
+  properties JSONB NOT NULL DEFAULT '{}',
   label TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -56,3 +57,6 @@ CREATE TABLE IF NOT EXISTS diagram_history (
 );
 
 CREATE INDEX IF NOT EXISTS idx_diagram_history_diagram_version ON diagram_history (diagram_id, version);
+
+ALTER TABLE diagram_connections
+  ADD COLUMN IF NOT EXISTS properties JSONB NOT NULL DEFAULT '{}';

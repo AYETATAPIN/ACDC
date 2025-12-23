@@ -915,12 +915,14 @@ export default {
     },
 
     showError(message) {
-      console.error('Error:', message);
+      console.warn('Diagram error:', message);
       this.errorMessage = message;
-      // Автоматически скрываем ошибку через 5 секунд
-      setTimeout(() => {
+
+      // Auto-clear after 6 seconds
+      if (this.errorTimeout) clearTimeout(this.errorTimeout);
+      this.errorTimeout = setTimeout(() => {
         this.errorMessage = null;
-      }, 5000);
+      }, 6000);
     },
 
     handleGlobalMouseUp(event) {
@@ -981,26 +983,26 @@ export default {
     },
 
     handleElementClick(element, event) {
-      // If we just finished a drag (single or multi) — ignore this click completely
+      // Ignore clicks right after drag (prevents deselection)
       if (this.justInteracted) {
         return;
       }
 
-      // PRIORITY 1: Connection tool active → handle connection, do NOT select
+      // 1. Connection tool has highest priority
       if (this.isConnectionTool(this.currentTool)) {
         const x = element.x + element.width / 2;
         const y = element.y + element.height / 2;
         this.handleConnectionMode(x, y);
-        return; // Important: do not fall through to selection
+        return;
       }
 
-      // PRIORITY 2: Delete tool
+      // 2. Delete tool
       if (this.currentTool === 'delete') {
         this.deleteElement(element);
         return;
       }
 
-      // PRIORITY 3: Normal selection (select tool or other element tools)
+      // 3. Normal selection (only if not connection tool)
       this.selectElement(element, event);
     },
 
@@ -1060,14 +1062,26 @@ export default {
       }
 
       if (!this.connectionStart) {
+        // First click: select starting element
         this.connectionStart = clickedElement;
         this.isConnecting = true;
+        console.log('Connection start:', clickedElement.text);
       } else if (this.connectionStart.id !== clickedElement.id) {
-        if (this.isConnectionAllowed(this.connectionStart, clickedElement, this.currentTool)) {
+        // Second click: try to create connection
+        const allowed = this.isConnectionAllowed(this.connectionStart, clickedElement, this.currentTool);
+        if (allowed) {
           this.createConnection(this.connectionStart, clickedElement);
+          console.log('Connection created:', this.currentTool);
         } else {
           this.showError(this.connectionRuleMessage(this.connectionStart, clickedElement, this.currentTool));
+          console.warn('Connection blocked:', this.connectionRuleMessage(this.connectionStart, clickedElement, this.currentTool));
         }
+
+        // Reset connection mode
+        this.connectionStart = null;
+        this.isConnecting = false;
+      } else {
+        // Clicked same element twice → cancel
         this.connectionStart = null;
         this.isConnecting = false;
       }
@@ -1378,111 +1392,124 @@ export default {
     },
 
     isConnectionAllowed(fromElement, toElement, connectionType) {
+      if (!fromElement || !toElement || fromElement.id === toElement.id) return false;
       if (this.diagramType === 'free_mode') return true;
 
+      const fromType = fromElement.type;
+      const toType = toElement.type;
+
+      // Helper sets
+      const classLike = ['class', 'interface', 'enum', 'component', 'database'];
+      const structural = [...classLike, 'package', 'note'];
+      const usecaseLike = ['usecase'];
+      const actorLike = ['actor'];
+      const ucElements = [...usecaseLike, ...actorLike, 'package', 'note'];
+      const activityElements = ['initial', 'final', 'activity', 'decision', 'merge', 'fork', 'join', 'send_signal', 'receive_signal'];
+
       if (this.diagramType === 'class') {
-        // Для Class диаграммы разрешаем только между структурными элементами
-        if (!this.isClassLike(fromElement) || !this.isClassLike(toElement)) {
-          return false;
+        // All elements must be valid for class diagram
+        if (!structural.includes(fromType) || !structural.includes(toType)) return false;
+
+        // Note can only have association or dependency
+        if (fromType === 'note' || toType === 'note') {
+          return ['association', 'dependency'].includes(connectionType);
         }
-        
-        // Разрешенные связи для Class диаграммы
-        const allowedClassConnections = [
-          'association', 'inheritance', 'composition', 
-          'dependency', 'realization', 'aggregation'
-        ];
-        
-        return allowedClassConnections.includes(connectionType);
+
+        // Package can have any connection
+        if (fromType === 'package' || toType === 'package') {
+          return true; // all types allowed with package
+        }
+
+        switch (connectionType) {
+          case 'association':
+          case 'dependency':
+            return true; // allowed between any structural
+          case 'inheritance':
+          case 'composition':
+          case 'aggregation':
+            return classLike.includes(fromType) && classLike.includes(toType);
+          case 'realization':
+            return classLike.includes(fromType) && toType === 'interface';
+          default:
+            return false;
+        }
       }
 
       if (this.diagramType === 'use_case') {
-        // Для Use Case диаграммы разрешаем только между Use Case элементами
-        if (!this.isUseCaseElement(fromElement) || !this.isUseCaseElement(toElement)) {
-          return false;
+        if (!ucElements.includes(fromType) || !ucElements.includes(toType)) return false;
+
+        // Actor cannot connect to another Actor
+        if (fromType === 'actor' && toType === 'actor') return false;
+
+        // Note only association/dependency
+        if (fromType === 'note' || toType === 'note') {
+          return ['association', 'dependency'].includes(connectionType);
         }
-        
-        // Разрешенные связи для Use Case диаграммы
-        const allowedUseCaseConnections = [
-          'association', 'dependency', 'extend', 'include'
-        ];
-        
-        return allowedUseCaseConnections.includes(connectionType);
+
+        // Extend and Include only between usecase
+        if (connectionType === 'extend' || connectionType === 'include') {
+          return fromType === 'usecase' && toType === 'usecase';
+        }
+
+        // Association and Dependency allowed everywhere (except actor-actor)
+        if (connectionType === 'association' || connectionType === 'dependency') {
+          return true;
+        }
+
+        return false;
       }
 
       if (this.diagramType === 'activity_diagram') {
-        // Для Activity Diagram разрешаем только между Activity элементами
-        if (!this.isActivityElement(fromElement) || !this.isActivityElement(toElement)) {
-          return false;
-        }
-        
-        // Разрешенные связи для Activity Diagram
-        const allowedActivityConnections = [
-          'control_flow', 'object_flow'
-        ];
-        
-        return allowedActivityConnections.includes(connectionType);
+        if (!activityElements.includes(fromType) || !activityElements.includes(toType)) return false;
+
+        // Final node cannot have outgoing connections
+        if (fromType === 'final') return false;
+
+        // Control Flow and Object Flow allowed between any activity elements
+        return ['control_flow', 'object_flow'].includes(connectionType);
       }
 
       return false;
     },
 
     connectionRuleMessage(fromElement, toElement, connectionType) {
+      const from = fromElement.text || fromElement.type;
+      const to = toElement.text || toElement.type;
+
       if (this.diagramType === 'class') {
-        if (!this.isClassLike(fromElement) || !this.isClassLike(toElement)) {
-          return 'В Class диаграмме можно соединять только структурные элементы: классы, интерфейсы, перечисления, компоненты, базы данных, пакеты и заметки.';
+        if (fromElement.type === 'note' || toElement.type === 'note') {
+          return `Заметка (Note) может соединяться только Ассоциацией или Зависимостью.`;
         }
-        
-        const allowedClassConnections = [
-          'association', 'inheritance', 'composition', 
-          'dependency', 'realization', 'aggregation'
-        ];
-        
-        if (!allowedClassConnections.includes(connectionType)) {
-          return 'В Class диаграмме допустимы только: Association, Inheritance, Composition, Dependency, Realization, Aggregation.';
+        if (connectionType === 'realization') {
+          return `Реализация (Realization) возможна только от класса к интерфейсу.`;
         }
-        
-        return 'Connection allowed';
+        if (['inheritance', 'composition', 'aggregation'].includes(connectionType)) {
+          return `${connectionType} возможна только между классами, интерфейсами, перечислениями, компонентами или БД.`;
+        }
+        return `Тип связи "${connectionType}" запрещён в Class-диаграмме или между этими элементами.`;
       }
 
       if (this.diagramType === 'use_case') {
-        if (!this.isUseCaseElement(fromElement) || !this.isUseCaseElement(toElement)) {
-          return 'В Use Case диаграмме можно соединять только: Actor, Use Case, Package, Note.';
+        if (fromElement.type === 'actor' && toElement.type === 'actor') {
+          return `Актор не может соединяться с другим Актором.`;
         }
-        
-        const allowedUseCaseConnections = [
-          'association', 'dependency', 'extend', 'include'
-        ];
-        
-        if (!allowedUseCaseConnections.includes(connectionType)) {
-          return 'В Use Case диаграмме допустимы только: Association, Dependency, Extend, Include.';
+        if (fromElement.type === 'note' || toElement.type === 'note') {
+          return `Заметка в Use Case может соединяться только Ассоциацией или Зависимостью.`;
         }
-        
-        // Особые правила для Extend и Include
-        if ((connectionType === 'extend' || connectionType === 'include') && 
-            (!fromElement?.type === 'usecase' || !toElement?.type === 'usecase')) {
-          return 'Extend и Include работают только между Use Case элементами.';
+        if (['extend', 'include'].includes(connectionType)) {
+          return `«${connectionType}» возможно только между Вариантами использования (Use Case).`;
         }
-        
-        return 'Connection allowed';
+        return `Этот тип связи запрещён в Use Case-диаграмме.`;
       }
 
       if (this.diagramType === 'activity_diagram') {
-        if (!this.isActivityElement(fromElement) || !this.isActivityElement(toElement)) {
-          return 'В Activity Diagram можно соединять только элементы Activity Diagram.';
+        if (fromElement.type === 'final') {
+          return `Из конечного состояния (Final) нельзя проводить исходящие связи.`;
         }
-        
-        const allowedActivityConnections = [
-          'control_flow', 'object_flow'
-        ];
-        
-        if (!allowedActivityConnections.includes(connectionType)) {
-          return 'В Activity Diagram допустимы только Control Flow и Object Flow связи.';
-        }
-        
-        return 'Connection allowed';
+        return `Этот тип связи запрещён в Activity-диаграмме.`;
       }
 
-      return 'Такое соединение не поддерживается для выбранного типа диаграммы.';
+      return `Соединение от "${from}" к "${to}" типа "${connectionType}" запрещено в текущей диаграмме.`;
     },
 
     createConnection(fromElement, toElement) {

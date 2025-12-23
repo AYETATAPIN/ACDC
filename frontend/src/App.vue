@@ -232,14 +232,26 @@
             <p>Текущий инструмент: <strong>{{ currentTool }}</strong></p>
           </div>
 
+          <!-- Selection box -->
+          <div
+              v-if="selectionBox"
+              class="selection-box"
+              :style="{
+              left: selectionBox.x + 'px',
+              top: selectionBox.y + 'px',
+              width: selectionBox.width + 'px',
+              height: selectionBox.height + 'px'
+            }"
+          ></div>
+
           <!-- Elements -->
           <div
               v-for="element in elements"
               :key="element.id"
               class="element"
               :class="[{ 
-                  dragging: dragElement?.id === element.id, 
-                  selected: selectedElement?.id === element.id 
+                  dragging: dragElement?.id === element.id,
+                  selected: isElementSelected(element)
               }, `shape-${getElementShape(element.type)}`]"
               :style="getElementStyle(element)"
               @click.stop="handleElementClick(element)"
@@ -375,7 +387,7 @@
       </div>
 
       <DiagramPropertiesPanel
-        :selected-element="selectedElement"
+        :selected-element="primarySelectedElement"
         :selected-connection="selectedConnection"
         :selected-bend-point="selectedBendPoint"
         :get-element-preset="getElementPreset"
@@ -506,6 +518,14 @@ export default {
       bendPointDragOffset: { x: 0, y: 0 },
       selectedBendPoint: { connId: null, pointIndex: null },
 
+      selectedElements: [],          // array of selected elements (replaces single selectedElement for multi)
+      isMultiSelectDragging: false, // are we dragging the whole group?
+      multiDragOffset: { x: 0, y: 0 }, // offset from mouse to group centre
+      selectionBox: null,            // {x, y, width, height} for drag-select rectangle
+      selectionBoxStart: null,       // start point of selection box
+      // Prevent deselection right after drag or selection box
+      justInteracted: false,
+
     }
   },
   mounted() {
@@ -522,9 +542,6 @@ export default {
   },
 
   computed: {
-    availableElementTools() {
-      return this.elementPresets.filter(p => p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode');
-    },
     availableConnectionTools() {
       // Получаем все связи для текущего типа диаграммы
       const allConnections = this.connectionPresets.filter(p => 
@@ -563,6 +580,17 @@ export default {
             !['select', 'delete'].includes(p.type) && 
             (p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode')
         );
+    },
+
+    isElementSelected() {
+      return (element) => {
+        return this.selectedElements.some(el => el.id === element.id);
+      };
+    },
+
+    // Helper: primary selected element (first one) – used for properties panel
+    primarySelectedElement() {
+      return this.selectedElements[0] || null;
     },
   },
 
@@ -923,6 +951,12 @@ export default {
     },
 
     handleCanvasClick(event) {
+      // Ignore clicks right after drag or selection box
+      if (this.justInteracted) {
+        this.justInteracted = false;
+        return;
+      }
+
       if (this.currentTool === 'select' || this.currentTool === 'delete') {
         this.deselectAll();
         return;
@@ -934,14 +968,12 @@ export default {
       const {x, y} = this.getCanvasCoords(event);
       const clickedElement = this.getElementAtPosition(x, y);
 
-      if (clickedElement) return;
+      if (clickedElement) return; // click handled by element click
 
+      // Only cancel connection mode if clicking empty space
       if (this.isConnectionTool(this.currentTool)) {
         this.connectionStart = null;
         this.isConnecting = false;
-        if (this.selectedElement && this.selectedElement.id === this.connectionStart?.id) {
-          this.selectedElement = null;
-        }
         this.currentTool = this.defaultToolForDiagram();
       } else {
         this.createElement(this.currentTool, x, y);
@@ -1046,29 +1078,65 @@ export default {
     },
 
     handleMouseDown(event) {
-      // Middle button или Alt+ЛКМ — панорамирование холста
+      // Middle button or Alt+click = pan
       if (event.button === 1 || event.altKey) {
         this.isPanning = true;
-        this.panStart = {...this.pan};
+        this.panStart = { ...this.pan };
         this.pointerStart = { x: event.clientX, y: event.clientY };
         return;
       }
 
-      const {x, y} = this.getCanvasCoords(event);
-
+      const { x, y } = this.getCanvasCoords(event);
       const element = this.getElementAtPosition(x, y);
 
-      if (element && !this.isConnecting) {
-        this.dragElement = element;
-        this.dragOffset.x = x - element.x;
-        this.dragOffset.y = y - element.y;
-        this.isDragging = true;
-
-        this.selectedElement = element;
-
-        console.log('Start dragging:', element);
-        event.preventDefault();
+      // 1. Start selection box (only when tool = select, no element under cursor, no Shift)
+      if (!element && !event.shiftKey && this.currentTool === 'select') {
+        this.selectionBoxStart = { x, y };
+        this.selectionBox = { x, y, width: 0, height: 0 };
+        this.deselectAll(); // clear previous selection
+        this.justInteracted = true;
+        return;
       }
+
+      // 2. Clicked on an element
+      if (element && !this.isConnecting) {
+        // Check if this element is already part of current multi-selection
+        const alreadySelected = this.selectedElements.some(el => el.id === element.id);
+        const hasMultiple = this.selectedElements.length > 1;
+
+        // Case A: Multiple already selected AND we clicked on one of them → start group drag WITHOUT changing selection
+        if (hasMultiple && alreadySelected) {
+          this.isMultiSelectDragging = true;
+          const center = this.getSelectionCenter();
+          this.multiDragOffset = { x: x - center.x, y: y - center.y };
+          this.justInteracted = true;
+          event.preventDefault();
+          return;
+        }
+
+        // Case B: Normal selection logic (single click or Shift+click to add/remove)
+        this.selectElement(element, event);
+
+        // After selection logic — if now multiple selected → prepare group drag
+        if (this.selectedElements.length > 1) {
+          this.isMultiSelectDragging = true;
+          const center = this.getSelectionCenter();
+          this.multiDragOffset = { x: x - center.x, y: y - center.y };
+          this.justInteracted = true;
+        } else {
+          // Single element drag
+          this.dragElement = element;
+          this.dragOffset.x = x - element.x;
+          this.dragOffset.y = y - element.y;
+          this.isDragging = true;
+          this.justInteracted = true;
+        }
+
+        event.preventDefault();
+        return;
+      }
+
+      // 3. Clicked on empty space — handled by handleCanvasClick
     },
 
     handleMouseMove(event) {
@@ -1103,6 +1171,37 @@ export default {
         return;
       }
 
+      // Selection box update
+      if (this.selectionBoxStart) {
+        const { x, y } = this.getCanvasCoords(event);
+        const start = this.selectionBoxStart;
+        this.selectionBox = {
+          x: Math.min(start.x, x),
+          y: Math.min(start.y, y),
+          width: Math.abs(x - start.x),
+          height: Math.abs(y - start.y)
+        };
+        this.updateSelectionFromBox();
+        return;
+      }
+
+      // Multi-select group drag
+      if (this.isMultiSelectDragging && this.selectedElements.length > 1) {
+        const { x, y } = this.getCanvasCoords(event);
+        const center = this.getSelectionCenter();
+        const deltaX = x - center.x - this.multiDragOffset.x;
+        const deltaY = y - center.y - this.multiDragOffset.y;
+
+        this.selectedElements.forEach(el => {
+          const snapped = this.snapCoordinates(el.x + deltaX, el.y + deltaY);
+          el.x = snapped.x;
+          el.y = snapped.y;
+        });
+
+        this.updateConnections();
+        return;
+      }
+
       if (this.isPanning) {
         const dx = event.clientX - this.pointerStart.x;
         const dy = event.clientY - this.pointerStart.y;
@@ -1124,13 +1223,60 @@ export default {
     },
 
     handleMouseUp() {
-      this.handleGlobalMouseUp(); // Используем общий метод
+      this.handleGlobalMouseUp(); // Останавливаем все драги
+
+      // НЕ сбрасываем justInteracted здесь!
+      // Сбрасываем его ЧУТЬ ПОЗЖЕ — после того, как click-событие успеет отработать
+
       if (this.resizingElement) {
         this.resizingElement = null;
       }
       if (this.isPanning) {
         this.isPanning = false;
       }
+      if (this.selectionBoxStart) {
+        this.selectionBoxStart = null;
+        this.selectionBox = null;
+      }
+      if (this.isMultiSelectDragging) {
+        this.isMultiSelectDragging = false;
+      }
+
+      // Сбрасываем флаг с небольшой задержкой — после того, как click уже отработает
+      setTimeout(() => {
+        this.justInteracted = false;
+      }, 50);  // 50 мс достаточно, чтобы click прошёл
+    },
+
+    getSelectionCenter() {
+      if (this.selectedElements.length === 0) return { x: 0, y: 0 };
+      const sum = this.selectedElements.reduce((acc, el) => ({
+        x: acc.x + el.x + el.width / 2,
+        y: acc.y + el.y + el.height / 2
+      }), { x: 0, y: 0 });
+      return {
+        x: sum.x / this.selectedElements.length,
+        y: sum.y / this.selectedElements.length
+      };
+    },
+
+    updateSelectionFromBox() {
+      if (!this.selectionBox || this.selectionBox.width < 5) {
+        return;
+      }
+      const box = this.selectionBox;
+      const selected = this.elements.filter(el =>
+          el.x + el.width > box.x &&
+          el.x < box.x + box.width &&
+          el.y + el.height > box.y &&
+          el.y < box.y + box.height
+      );
+      this.selectedElements = selected;
+    },
+
+// Update element visual selection class
+    isElementSelected(element) {
+      return this.selectedElements.some(el => el.id === element.id);
     },
 
     updateConnections() {
@@ -1695,10 +1841,21 @@ export default {
       return `<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><!-- rendered elements --></svg>`
     },
 
-    selectElement(element) {
+    selectElement(element, event = { shiftKey: false }) {
       if (this.isConnecting) return;
-      this.selectedElement = element;
-      this.selectedConnection = null; // deselect connection if any
+
+      if (event.shiftKey) {
+        const already = this.selectedElements.some(el => el.id === element.id);
+        if (already) {
+          this.selectedElements = this.selectedElements.filter(el => el.id !== element.id);
+        } else {
+          this.selectedElements = [...this.selectedElements, element];
+        }
+      } else {
+        this.selectedElements = [element];
+      }
+
+      this.selectedConnection = null;
       this.selectedBendPoint = { connId: null, pointIndex: null };
     },
 
@@ -1721,9 +1878,10 @@ export default {
     },
 
     deselectAll() {
-      this.selectedElement = null;
+      this.selectedElements = [];
       this.selectedConnection = null;
       this.selectedBendPoint = { connId: null, pointIndex: null };
+      this.selectionBox = null;
     },
 
     handleResizeMouseDown(element, event) {
@@ -2790,5 +2948,20 @@ button.has-changes {
 .actor-name {
     word-break: break-word;
     max-width: 90%;
+}
+
+.selection-box {
+  position: absolute;
+  border: 2px dashed #3498db;
+  background: rgba(52, 152, 219, 0.1);
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Highlight multi-selected elements */
+.element.selected {
+  outline: 3px solid #e74c3c !important;
+  outline-offset: 2px;
+  z-index: 10;
 }
 </style>

@@ -1187,19 +1187,32 @@ export default {
 
       // Multi-select group drag
       if (this.isMultiSelectDragging && this.selectedElements.length > 1) {
-        const { x, y } = this.getCanvasCoords(event);
-        const center = this.getSelectionCenter();
-        const deltaX = x - center.x - this.multiDragOffset.x;
-        const deltaY = y - center.y - this.multiDragOffset.y;
+          const { x, y } = this.getCanvasCoords(event);
+          const center = this.getSelectionCenter();
+          const deltaX = x - center.x - this.multiDragOffset.x;
+          const deltaY = y - center.y - this.multiDragOffset.y;
 
-        this.selectedElements.forEach(el => {
-          const snapped = this.snapCoordinates(el.x + deltaX, el.y + deltaY);
-          el.x = snapped.x;
-          el.y = snapped.y;
-        });
+          // Move selected elements
+          this.selectedElements.forEach(el => {
+            const snapped = this.snapCoordinates(el.x + deltaX, el.y + deltaY);
+            el.x = snapped.x;
+            el.y = snapped.y;
+          });
 
-        this.updateConnections();
-        return;
+          // === NEW: Rigidly move ALL points (including middle bend points) of connections where BOTH ends are selected ===
+          this.connections.forEach(conn => {
+            const fromSelected = this.selectedElements.some(el => el.id === conn.from);
+            const toSelected = this.selectedElements.some(el => el.id === conn.to);
+
+            // Only move the entire line if BOTH endpoints are in the selected group
+            if (fromSelected && toSelected && Array.isArray(conn.points) && conn.points.length > 0) {
+              conn.points = conn.points.map(pt => ({
+                x: this.snapToGrid ? Math.round((pt.x + deltaX) / this.gridSize) * this.gridSize : pt.x + deltaX,
+                y: this.snapToGrid ? Math.round((pt.y + deltaY) / this.gridSize) * this.gridSize : pt.y + deltaY
+              }));
+            }
+          });
+
       }
 
       if (this.isPanning) {
@@ -1289,10 +1302,11 @@ export default {
         const end = this.getAnchorPoint(toElement, fromElement);
 
         let points = Array.isArray(conn.points) ? conn.points.slice() : [];
+
         if (points.length < 2) {
           points = [start, end];
         } else {
-          // update endpoints only, keep middle points as user-defined bend points
+          // ONLY update first and last point — preserve all manual middle bend points
           points[0] = start;
           points[points.length - 1] = end;
         }

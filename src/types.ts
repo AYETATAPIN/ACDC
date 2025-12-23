@@ -1,4 +1,6 @@
-export type DiagramType = 'class' | 'use_case' | 'free_mode';
+export type DiagramType = 'class' | 'use_case' | 'free_mode' | 'activity_diagram';
+
+export type ActivityNodeType = 'initial' | 'final' | 'activity' | 'decision' | 'merge' | 'fork' | 'join' | 'send_signal' | 'receive_signal';
 
 export type Point = {
     x: number;

@@ -6,6 +6,7 @@
       <select :value="diagramType" @change="setDiagramType($event.target.value)">
         <option value="class">Class</option>
         <option value="use_case">Use Case</option>
+        <option value="activity_diagram">Activity Diagram</option>
         <option value="free_mode">Free Mode</option>
       </select>
       <button

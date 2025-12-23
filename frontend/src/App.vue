@@ -37,21 +37,22 @@
 
     <div class="main">
       <DiagramToolbar
-        :available-element-tools="availableElementTools"
-        :available-connection-tools="availableConnectionTools"
-        :current-tool="currentTool"
-        :select-tool="selectTool"
-        :diagrams="diagrams"
-        :current-diagram-id="currentDiagramId"
-        :is-loading-list="isLoadingList"
-        :load-diagrams-list="loadDiagramsList"
-        :load-diagram="loadDiagram"
-        :format-date="formatDate"
-        :get-connection-color="getConnectionColor"
-        :elements-count="elements.length"
-        :connections-count="connections.length"
-        :is-connecting="isConnecting"
-        :is-dragging="isDragging"
+          :selection-tools="selectionTools"
+          :available-element-tools="availableElementTools"
+          :available-connection-tools="availableConnectionTools"
+          :current-tool="currentTool"
+          :select-tool="selectTool"
+          :diagrams="diagrams"
+          :current-diagram-id="currentDiagramId"
+          :is-loading-list="isLoadingList"
+          :load-diagrams-list="loadDiagramsList"
+          :load-diagram="loadDiagram"
+          :format-date="formatDate"
+          :get-connection-color="getConnectionColor"
+          :elements-count="elements.length"
+          :connections-count="connections.length"
+          :is-connecting="isConnecting"
+          :is-dragging="isDragging"
       />
 
       <div class="canvas"
@@ -73,7 +74,7 @@
                 :key="conn.id"
                 :d="getConnectionPath(conn)"
                 :stroke="conn.customColor || getConnectionColor(conn.type)"
-                stroke-width="4"
+                :stroke-width="conn.strokeWidth || 2" 
                 :stroke-dasharray="conn.customDash || getConnectionDash(conn.type) || null"
                 :marker-end="`url(#${getMarkerId(conn)})`"
                 fill="none"
@@ -150,6 +151,62 @@
               >
                 <polygon points="0 0, 12 6, 0 12" :fill="getConnectionColor('association')" :stroke="getConnectionColor('association')" stroke-width="0" />
               </marker>
+                  <!-- Пустая стрелка (для наследования и реализации) -->
+              <marker
+                  id="arrow-empty"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="12"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                  viewBox="0 0 12 12"
+              >
+                  <polygon
+                      points="0 0, 12 6, 0 12"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1"
+                  />
+              </marker>
+              
+              <!-- Закрашенный ромб (композиция) -->
+              <marker
+                  id="arrow-filled-diamond"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="12"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                  viewBox="0 0 12 12"
+              >
+                  <polygon
+                      points="0 6, 6 0, 12 6, 6 12"
+                      fill="currentColor"
+                      stroke="currentColor"
+                      stroke-width="0"
+                  />
+              </marker>
+              
+              <!-- Пустой ромб (агрегация) -->
+              <marker
+                  id="arrow-empty-diamond"
+                  markerWidth="12"
+                  markerHeight="12"
+                  refX="12"
+                  refY="6"
+                  orient="auto"
+                  markerUnits="strokeWidth"
+                  viewBox="0 0 12 12"
+              >
+                  <polygon
+                      points="0 6, 6 0, 12 6, 6 12"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1"
+                  />
+              </marker>
             </defs>
           </svg>
 
@@ -180,13 +237,139 @@
               v-for="element in elements"
               :key="element.id"
               class="element"
-              :class="[{ dragging: dragElement?.id === element.id, selected: selectedElement?.id === element.id }, `shape-${getElementShape(element.type)}`]"
+              :class="[{ 
+                  dragging: dragElement?.id === element.id, 
+                  selected: selectedElement?.id === element.id 
+              }, `shape-${getElementShape(element.type)}`]"
               :style="getElementStyle(element)"
               @click.stop="handleElementClick(element)"
           >
-            <div class="element-text-main" :style="{ fontSize: (element.fontSize || 14) + 'px' }">{{ element.text }}</div>
-            <div class="element-type-tag">{{ element.type }}</div>
-            <div class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="Изменить размер"></div>
+              <!-- Для классов с атрибутами и операциями -->
+              <template v-if="element.type === 'class'">
+                  <!-- Заголовок класса -->
+                  <div class="class-header" :style="{ fontSize: (element.fontSize || 14) + 'px' }">
+                      {{ element.text || 'Class' }}
+                  </div>
+                  
+                  <!-- Разделитель -->
+                  <hr class="class-divider" />
+                  
+                  <!-- Атрибуты -->
+                  <div class="class-section attributes">
+                      <div 
+                          v-for="(attr, index) in (element.properties?.attributes || [])" 
+                          :key="'attr-' + index"
+                          class="class-line"
+                      >
+                          {{ attr }}
+                      </div>
+                      <div v-if="!(element.properties?.attributes?.length)" class="class-placeholder">
+                          &lt;attributes&gt;
+                      </div>
+                  </div>
+                  
+                  <!-- Разделитель -->
+                  <hr class="class-divider" />
+                  
+                  <!-- Операции -->
+                  <div class="class-section operations">
+                      <div 
+                          v-for="(op, index) in (element.properties?.operations || [])" 
+                          :key="'op-' + index"
+                          class="class-line"
+                      >
+                          {{ op }}
+                      </div>
+                      <div v-if="!(element.properties?.operations?.length)" class="class-placeholder">
+                          &lt;operations&gt;
+                      </div>
+                  </div>
+                  
+                  <div class="element-type-tag">{{ element.type }}</div>
+              </template>
+
+              <!-- Для ромбов (decision, merge) -->
+              <template v-else-if="getElementShape(element.type) === 'diamond'">
+                  <div class="diamond-content">
+                      <div class="diamond-title" :style="{ fontSize: (element.fontSize || 14) + 'px' }">
+                          {{ element.text || getDefaultText(element.type) }}
+                      </div>
+                      <div class="diamond-type">{{ element.type }}</div>
+                  </div>
+              </template>
+              <template v-else-if="element.type === 'actor'">
+                  <div class="actor-container">
+                      <!-- Голова -->
+                      <div class="actor-head" :style="{ 
+                          width: '30px', 
+                          height: '30px', 
+                          backgroundColor: element.customColor || getElementPreset('actor')?.color || '#27ae60',
+                          border: `2px solid ${element.customBorder || getElementPreset('actor')?.border || '#229954'}`,
+                          borderRadius: '50%',
+                          margin: '0 auto 8px'
+                      }"></div>
+                      
+                      <!-- Тело -->
+                      <div class="actor-body" :style="{ 
+                          width: '2px', 
+                          height: '30px', 
+                          backgroundColor: element.customBorder || getElementPreset('actor')?.border || '#229954',
+                          margin: '0 auto'
+                      }"></div>
+                      
+                      <!-- Руки -->
+                      <div class="actor-arms" :style="{ 
+                          width: '40px', 
+                          height: '2px', 
+                          backgroundColor: element.customBorder || getElementPreset('actor')?.border || '#229954',
+                          margin: '0 auto',
+                          position: 'relative',
+                          top: '-15px'
+                      }"></div>
+                      
+                      <!-- Ноги -->
+                      <div class="actor-legs" :style="{ 
+                          display: 'flex',
+                          justifyContent: 'center',
+                          gap: '10px',
+                          marginTop: '8px'
+                      }">
+                          <div :style="{ 
+                              width: '2px', 
+                              height: '25px', 
+                              backgroundColor: element.customBorder || getElementPreset('actor')?.border || '#229954',
+                              transform: 'rotate(30deg)'
+                          }"></div>
+                          <div :style="{ 
+                              width: '2px', 
+                              height: '25px', 
+                              backgroundColor: element.customBorder || getElementPreset('actor')?.border || '#229954',
+                              transform: 'rotate(-30deg)'
+                          }"></div>
+                      </div>
+                      
+                      <!-- Название актора -->
+                      <div class="actor-name" :style="{ 
+                          fontSize: (element.fontSize || 12) + 'px',
+                          color: element.customBorder || getElementPreset('actor')?.border || '#229954',
+                          textAlign: 'center',
+                          marginTop: '10px',
+                          fontWeight: 'bold'
+                      }">
+                          {{ element.text || 'Actor' }}
+                      </div>
+                  </div>
+                  <div class="element-type-tag">{{ element.type }}</div>
+              </template>
+              <!-- Для остальных типов -->
+              <template v-else>
+                  <div class="element-text-main" :style="{ fontSize: (element.fontSize || 14) + 'px' }">
+                      {{ element.text || getDefaultText(element.type) }}
+                  </div>
+                  <div class="element-type-tag">{{ element.type }}</div>
+              </template>
+              
+              <div class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="Изменить размер"></div>
           </div>
         </div>
       </div>
@@ -202,6 +385,7 @@
         :clear-bend-points="clearBendPoints"
         :remove-selected-bend-point="removeSelectedBendPoint"
         :remove-last-bend-point="removeLastBendPoint"
+        :delete-connection="deleteConnection" 
       />
 
       <DiagramHistoryPanel
@@ -238,24 +422,52 @@ export default {
       snapToGrid: true,
       gridSize: 10,
       elementPresets: [
-        { type: 'select', label: 'Select/Move', shape: '➡️', diagrams: ['class', 'use_case', 'free_mode'] },
-        { type: 'delete', label: 'Delete', shape: '🗑️', diagrams: ['class', 'use_case', 'free_mode'] },
+        // Инструменты (всегда доступны)
+        { type: 'select', label: 'Select/Move', shape: '➡️', diagrams: ['class', 'use_case', 'activity_diagram', 'free_mode'] },
+        { type: 'delete', label: 'Delete', shape: '🗑️', diagrams: ['class', 'use_case', 'activity_diagram', 'free_mode'] },
+        
+        // Class Diagram элементы
         { type: 'class', label: 'Class', shape: 'rect', color: '#3498db', border: '#2d83be', textColor: '#ffffff', width: 140, height: 80, diagrams: ['class', 'free_mode'] },
         { type: 'interface', label: 'Interface', shape: 'rect', color: '#9b59b6', border: '#8e44ad', textColor: '#ffffff', width: 140, height: 80, diagrams: ['class', 'free_mode'] },
         { type: 'enum', label: 'Enum', shape: 'rect', color: '#e67e22', border: '#d35400', textColor: '#ffffff', width: 140, height: 80, diagrams: ['class', 'free_mode'] },
         { type: 'component', label: 'Component', shape: 'rect', color: '#16a085', border: '#13856f', textColor: '#ffffff', width: 150, height: 90, diagrams: ['class', 'free_mode'] },
         { type: 'database', label: 'Database', shape: 'cylinder', color: '#34495e', border: '#2c3e50', textColor: '#ecf0f1', width: 150, height: 90, diagrams: ['class', 'free_mode'] },
-        { type: 'actor', label: 'Actor', shape: 'rect', color: '#27ae60', border: '#229954', textColor: '#ffffff', width: 90, height: 120, diagrams: ['use_case', 'free_mode'] },
-        { type: 'usecase', label: 'Use Case', shape: 'ellipse', color: '#f97316', border: '#ea580c', textColor: '#ffffff', width: 160, height: 90, diagrams: ['use_case', 'free_mode'] },
         { type: 'note', label: 'Note', shape: 'rect', color: '#fff7d6', border: '#f1c40f', textColor: '#2c3e50', width: 160, height: 100, diagrams: ['class', 'use_case', 'free_mode'], dashed: true },
-        { type: 'package', label: 'Package', shape: 'rect', color: '#1abc9c', border: '#16a085', textColor: '#ffffff', width: 180, height: 100, diagrams: ['class', 'use_case', 'free_mode'] }
+        { type: 'package', label: 'Package', shape: 'rect', color: '#1abc9c', border: '#16a085', textColor: '#ffffff', width: 180, height: 100, diagrams: ['class', 'use_case', 'free_mode'] },
+        
+        // Use Case Diagram элементы
+        { type: 'actor', label: 'Actor', shape: 'actor', color: '#27ae60', border: '#229954', textColor: '#ffffff', width: 60, height: 100, diagrams: ['use_case', 'free_mode'] },
+        { type: 'usecase', label: 'Use Case', shape: 'ellipse', color: '#f97316', border: '#ea580c', textColor: '#ffffff', width: 160, height: 90, diagrams: ['use_case', 'free_mode'] },
+        
+        // Activity Diagram элементы
+        { type: 'initial', label: 'Initial', shape: 'circle', color: '#27ae60', border: '#229954', textColor: '#ffffff', width: 40, height: 40, diagrams: ['activity_diagram', 'free_mode'] },
+        { type: 'final', label: 'Final', shape: 'double-circle', color: '#e74c3c', border: '#c0392b', textColor: '#ffffff', width: 40, height: 40, diagrams: ['activity_diagram', 'free_mode'] },
+        { type: 'activity', label: 'Activity', shape: 'roundrect', color: '#3498db', border: '#2980b9', textColor: '#ffffff', width: 120, height: 60, diagrams: ['activity_diagram', 'free_mode'] },
+        { type: 'decision', label: 'Decision', shape: 'diamond', color: '#f39c12', border: '#d68910', textColor: '#ffffff', width: 80, height: 80, diagrams: ['activity_diagram', 'free_mode'] },
+        { type: 'merge', label: 'Merge', shape: 'diamond', color: '#95a5a6', border: '#7f8c8d', textColor: '#ffffff', width: 80, height: 80, diagrams: ['activity_diagram', 'free_mode'] },
+        { type: 'fork', label: 'Fork', shape: 'rect', color: '#2c3e50', border: '#2c3e50', textColor: '#ffffff', width: 100, height: 40, diagrams: ['activity_diagram', 'free_mode'] },
+        { type: 'join', label: 'Join', shape: 'rect', color: '#2c3e50', border: '#2c3e50', textColor: '#ffffff', width: 100, height: 40, diagrams: ['activity_diagram', 'free_mode'] },
+        { type: 'send_signal', label: 'Send Signal', shape: 'pentagon', color: '#9b59b6', border: '#8e44ad', textColor: '#ffffff', width: 100, height: 60, diagrams: ['activity_diagram', 'free_mode'] },
+        { type: 'receive_signal', label: 'Receive Signal', shape: 'pentagon', color: '#1abc9c', border: '#16a085', textColor: '#ffffff', width: 100, height: 60, diagrams: ['activity_diagram', 'free_mode'] },
       ],
       connectionPresets: [
-        { type: 'association', label: 'Association', color: '#34495e', diagrams: ['class', 'use_case', 'free_mode'], dash: '' },
-        { type: 'inheritance', label: 'Inheritance', color: '#8e44ad', diagrams: ['class', 'free_mode'], dash: '10 6' },
-        { type: 'composition', label: 'Composition', color: '#27ae60', diagrams: ['class', 'free_mode'], dash: '' },
-        { type: 'dependency', label: 'Dependency', color: '#7f8c8d', diagrams: ['class', 'use_case', 'free_mode'], dash: '6 4' },
-        { type: 'extend', label: 'Extend', color: '#c0392b', diagrams: ['use_case', 'free_mode'], dash: '4 4' }
+        // Общие связи (для нескольких типов диаграмм)
+        { type: 'association', label: 'Ассоциация', color: '#34495e', diagrams: ['class', 'use_case', 'free_mode'], dash: '' },
+        { type: 'dependency', label: 'Зависимость', color: '#7f8c8d', diagrams: ['class', 'use_case', 'free_mode'], dash: '6 4' },
+        
+        // Только для Class Diagram
+        { type: 'inheritance', label: 'Наследование', color: '#8e44ad', diagrams: ['class', 'free_mode'], dash: '10 6' },
+        { type: 'composition', label: 'Композиция', color: '#27ae60', diagrams: ['class', 'free_mode'], dash: '' },
+        { type: 'realization', label: 'Реализация', color: '#9b59b6', diagrams: ['class', 'free_mode'], dash: '10 6' },
+        { type: 'aggregation', label: 'Агрегация', color: '#e67e22', diagrams: ['class', 'free_mode'], dash: '' },
+        
+        // Только для Use Case Diagram
+        { type: 'extend', label: 'Extend', color: '#c0392b', diagrams: ['use_case', 'free_mode'], dash: '4 4' },
+        { type: 'include', label: 'Include', color: '#3498db', diagrams: ['use_case', 'free_mode'], dash: '4 4' },
+        
+        // Только для Activity Diagram
+        { type: 'control_flow', label: 'Control Flow', color: '#2c3e50', diagrams: ['activity_diagram', 'free_mode'], dash: '' },
+        { type: 'object_flow', label: 'Object Flow', color: '#e67e22', diagrams: ['activity_diagram', 'free_mode'], dash: '6 4' },
       ],
       diagramName: '',
       diagramType: 'class',
@@ -314,14 +526,44 @@ export default {
       return this.elementPresets.filter(p => p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode');
     },
     availableConnectionTools() {
-      return this.connectionPresets.filter(p => p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode');
+      // Получаем все связи для текущего типа диаграммы
+      const allConnections = this.connectionPresets.filter(p => 
+        p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode'
+      );
+      
+      // Убираем дубликаты по type
+      const uniqueConnections = [];
+      const seenTypes = new Set();
+      
+      for (const conn of allConnections) {
+        if (!seenTypes.has(conn.type)) {
+          seenTypes.add(conn.type);
+          uniqueConnections.push(conn);
+        }
+      }
+      
+      return uniqueConnections;
     },
     elementToolTypes() {
       return this.availableElementTools.map(p => p.type);
     },
     connectionToolTypes() {
       return this.availableConnectionTools.map(p => p.type);
-    }
+    },
+    selectionTools() {
+        return this.elementPresets.filter(p => 
+            ['select', 'delete'].includes(p.type) && 
+            (p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode')
+        );
+    },
+    
+    // Элементы без инструментов выбора/удаления
+    availableElementTools() {
+        return this.elementPresets.filter(p => 
+            !['select', 'delete'].includes(p.type) && 
+            (p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode')
+        );
+    },
   },
 
   watch: {
@@ -405,7 +647,16 @@ export default {
       // Prefer select tool first
       if (this.availableElementTools.find(t => t.type === 'select')) return 'select';
       const fallback = this.availableElementTools[0]?.type;
-      if (this.diagramType === 'use_case') return this.availableElementTools.find(t => t.type === 'actor')?.type || fallback || null;
+      
+      if (this.diagramType === 'use_case') 
+        return this.availableElementTools.find(t => t.type === 'actor')?.type || fallback || null;
+      
+      if (this.diagramType === 'activity_diagram') 
+        return this.availableElementTools.find(t => t.type === 'activity')?.type || fallback || null;
+      
+      if (this.diagramType === 'class') 
+        return this.availableElementTools.find(t => t.type === 'class')?.type || fallback || null;
+      
       return fallback || null;
     },
 
@@ -458,7 +709,14 @@ export default {
     getConnectionById(id) {
       return this.connections.find(c => c.id === id) || { label: '' };
     },
-
+    // В methods App.vue добавляем:
+    deleteConnection(connection) {
+      if (confirm('Удалить эту связь?')) {
+        this.setConnections(this.connections.filter(c => c.id !== connection.id));
+        this.selectedConnection = null;
+        this.selectedBendPoint = { connId: null, pointIndex: null };
+      }
+    },
     startLabelEdit(conn, event) {
       this.editingConnectionLabel = { connId: conn.id };
       this.$nextTick(() => {
@@ -520,7 +778,23 @@ export default {
     },
 
     getElementShape(type) {
-      return this.getElementPreset(type)?.shape || 'rect';
+        const preset = this.elementPresets.find(p => p.type === type);
+        if (preset) return preset.shape;
+        
+        const activityShapes = {
+            'initial': 'circle',
+            'final': 'double-circle',
+            'activity': 'roundrect',
+            'decision': 'diamond',
+            'merge': 'diamond',
+            'fork': 'rect',
+            'join': 'rect',
+            'send_signal': 'pentagon',
+            'receive_signal': 'pentagon',
+            'actor': 'actor'  // Добавляем
+        };
+        
+        return activityShapes[type] || 'rect';
     },
 
     getElementStyle(element) {
@@ -531,11 +805,12 @@ export default {
       const borderBase = element.customBorder || preset?.border || '#2c3e50';
 
       const borderColor = this.selectedElement?.id === element.id
-          ? '#e74c3c'
-          : this.connectionStart?.id === element.id
-              ? '#f39c12'
-              : borderBase;
+        ? '#e74c3c'
+        : this.connectionStart?.id === element.id
+          ? '#f39c12'
+          : borderBase;
 
+      // Базовый стиль
       const style = {
         left: `${element.x}px`,
         top: `${element.y}px`,
@@ -543,16 +818,48 @@ export default {
         height: `${element.height}px`,
         background: bgColor,
         color: preset?.textColor || '#ffffff',
-        border: `${preset?.dashed ? '2px dashed' : '2px solid'} ${borderColor}`,
-        borderRadius: shape === 'ellipse' ? '50%' : shape === 'cylinder' ? '0 0 50% 50%' : '10px'
+        border: `2px solid ${borderColor}`,
       };
 
-      if (shape === 'cylinder') {
-        style.background = `linear-gradient(180deg, ${bgColor} 0%, ${bgColor} 55%, ${borderBase} 100%)`;
+      // Специальные формы
+      if (shape === 'actor') {
+          // Для актора убираем стандартные стили
+          style.background = 'transparent';
+          style.border = 'none';
+          style.boxShadow = 'none';
+      }
+      if (shape === 'ellipse') {
+        style.borderRadius = '50%';
+      } else if (shape === 'roundrect') {
+        style.borderRadius = '20px';
+      } else if (shape === 'diamond') {
+        // Превращаем в ромб через трансформацию
+      style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
+      style.width = `${element.width}px`;
+      style.height = `${element.height}px`;
+      style.display = 'flex';
+      style.flexDirection = 'column';
+      style.alignItems = 'center';
+      style.justifyContent = 'center';
+      } else if (shape === 'bar') {
+        // Толстая линия для fork/join
+        style.borderRadius = '0';
+        style.height = `${element.height}px`;
+        style.width = `${element.width}px`;
+      } else if (shape === 'pentagon') {
+        // Пятиугольник для сигналов
+        style.clipPath = 'polygon(50% 0%, 100% 38%, 82% 100%, 18% 100%, 0% 38%)';
+      } else if (shape === 'double-circle') {
+        // Двойной круг для конечного состояния
+        style.borderRadius = '50%';
+        style.boxShadow = `inset 0 0 0 4px ${borderColor}`;
+      } else {
+        style.borderRadius = '10px';
       }
 
       if (this.dragElement?.id === element.id) {
         style.boxShadow = '0 8px 16px rgba(0,0,0,0.3)';
+        style.zIndex = '1000';
       }
 
       return style;
@@ -679,7 +986,25 @@ export default {
     },
 
     getMarkerId(conn) {
-      return conn?.id ? `arrow-${conn.id}` : 'arrow-default';
+      if (!conn) return 'arrow-default';
+      
+      // Для разных типов связей разные маркеры
+      switch(conn.type) {
+        case 'inheritance':
+        case 'realization':
+          return 'arrow-empty';
+        case 'composition':
+          return 'arrow-filled-diamond';
+        case 'aggregation':
+          return 'arrow-empty-diamond';
+        case 'dependency':
+          return 'arrow-dashed';
+        case 'extend':
+        case 'include':
+          return 'arrow-dashed';
+        default:
+          return conn?.id ? `arrow-${conn.id}` : 'arrow-default';
+      }
     },
 
     handleConnectionMode(x, y) {
@@ -873,11 +1198,19 @@ export default {
     },
 
     isClassLike(element) {
-      return ['class', 'interface', 'enum', 'component', 'package', 'database'].includes(element?.type);
+      return ['class', 'interface', 'enum', 'component', 'database', 'package', 'note'].includes(element?.type);
     },
 
     isUseCaseElement(element) {
       return ['actor', 'usecase', 'note', 'package'].includes(element?.type);
+    },
+
+    isActivityElement(element) {
+      const activityTypes = [
+        'initial', 'final', 'activity', 'decision', 'merge', 
+        'fork', 'join', 'send_signal', 'receive_signal'
+      ];
+      return activityTypes.includes(element?.type);
     },
 
     isStructuralElement(element) {
@@ -887,45 +1220,106 @@ export default {
     isConnectionAllowed(fromElement, toElement, connectionType) {
       if (this.diagramType === 'free_mode') return true;
 
-      if (connectionType === 'association') {
-        if (this.diagramType === 'use_case') {
-          return this.isUseCaseElement(fromElement) && this.isUseCaseElement(toElement);
+      if (this.diagramType === 'class') {
+        // Для Class диаграммы разрешаем только между структурными элементами
+        if (!this.isClassLike(fromElement) || !this.isClassLike(toElement)) {
+          return false;
         }
-        return this.isStructuralElement(fromElement) && this.isStructuralElement(toElement);
+        
+        // Разрешенные связи для Class диаграммы
+        const allowedClassConnections = [
+          'association', 'inheritance', 'composition', 
+          'dependency', 'realization', 'aggregation'
+        ];
+        
+        return allowedClassConnections.includes(connectionType);
       }
 
-      if (connectionType === 'extend') {
-        return this.diagramType === 'use_case' && fromElement?.type === 'usecase' && toElement?.type === 'usecase';
-      }
-
-      if (connectionType === 'dependency') {
-        if (this.diagramType === 'use_case') {
-          return this.isUseCaseElement(fromElement) && this.isUseCaseElement(toElement);
+      if (this.diagramType === 'use_case') {
+        // Для Use Case диаграммы разрешаем только между Use Case элементами
+        if (!this.isUseCaseElement(fromElement) || !this.isUseCaseElement(toElement)) {
+          return false;
         }
-        return this.diagramType === 'class' && this.isClassLike(fromElement) && this.isClassLike(toElement);
+        
+        // Разрешенные связи для Use Case диаграммы
+        const allowedUseCaseConnections = [
+          'association', 'dependency', 'extend', 'include'
+        ];
+        
+        return allowedUseCaseConnections.includes(connectionType);
       }
 
-      if (['inheritance', 'composition'].includes(connectionType)) {
-        return this.diagramType === 'class' && this.isClassLike(fromElement) && this.isClassLike(toElement);
+      if (this.diagramType === 'activity_diagram') {
+        // Для Activity Diagram разрешаем только между Activity элементами
+        if (!this.isActivityElement(fromElement) || !this.isActivityElement(toElement)) {
+          return false;
+        }
+        
+        // Разрешенные связи для Activity Diagram
+        const allowedActivityConnections = [
+          'control_flow', 'object_flow'
+        ];
+        
+        return allowedActivityConnections.includes(connectionType);
       }
 
       return false;
     },
 
     connectionRuleMessage(fromElement, toElement, connectionType) {
-      if (this.diagramType === 'use_case') {
-        if (connectionType === 'extend') {
-          return 'Extend допустим только между Use Case.';
+      if (this.diagramType === 'class') {
+        if (!this.isClassLike(fromElement) || !this.isClassLike(toElement)) {
+          return 'В Class диаграмме можно соединять только структурные элементы: классы, интерфейсы, перечисления, компоненты, базы данных, пакеты и заметки.';
         }
-        return 'В диаграмме вариантов использования допустимы Association/Dependency между Actor/Use Case/Note/Package.';
+        
+        const allowedClassConnections = [
+          'association', 'inheritance', 'composition', 
+          'dependency', 'realization', 'aggregation'
+        ];
+        
+        if (!allowedClassConnections.includes(connectionType)) {
+          return 'В Class диаграмме допустимы только: Association, Inheritance, Composition, Dependency, Realization, Aggregation.';
+        }
+        
+        return 'Connection allowed';
       }
 
-      if (connectionType === 'association') {
-        return 'Association работает между классами, интерфейсами, enum, компонентами, пакетами или заметками.';
+      if (this.diagramType === 'use_case') {
+        if (!this.isUseCaseElement(fromElement) || !this.isUseCaseElement(toElement)) {
+          return 'В Use Case диаграмме можно соединять только: Actor, Use Case, Package, Note.';
+        }
+        
+        const allowedUseCaseConnections = [
+          'association', 'dependency', 'extend', 'include'
+        ];
+        
+        if (!allowedUseCaseConnections.includes(connectionType)) {
+          return 'В Use Case диаграмме допустимы только: Association, Dependency, Extend, Include.';
+        }
+        
+        // Особые правила для Extend и Include
+        if ((connectionType === 'extend' || connectionType === 'include') && 
+            (!fromElement?.type === 'usecase' || !toElement?.type === 'usecase')) {
+          return 'Extend и Include работают только между Use Case элементами.';
+        }
+        
+        return 'Connection allowed';
       }
 
-      if (['inheritance', 'composition', 'dependency'].includes(connectionType)) {
-        return 'Наследование, композиция и зависимости работают только между классами, интерфейсами, enum, компонентами, пакетами или базами данных.';
+      if (this.diagramType === 'activity_diagram') {
+        if (!this.isActivityElement(fromElement) || !this.isActivityElement(toElement)) {
+          return 'В Activity Diagram можно соединять только элементы Activity Diagram.';
+        }
+        
+        const allowedActivityConnections = [
+          'control_flow', 'object_flow'
+        ];
+        
+        if (!allowedActivityConnections.includes(connectionType)) {
+          return 'В Activity Diagram допустимы только Control Flow и Object Flow связи.';
+        }
+        
+        return 'Connection allowed';
       }
 
       return 'Такое соединение не поддерживается для выбранного типа диаграммы.';
@@ -952,6 +1346,7 @@ export default {
         points: [start, mid, end],
         customColor: null,
         customDash: null,
+        strokeWidth: 2, // Добавляем толщину по умолчанию
         labelColor: '#2c3e50',
         labelFontSize: 12
       };
@@ -1212,17 +1607,24 @@ export default {
           return {};
         })();
         return {
-          id: block.id,
-          type: block.type,
-          x: Number(block.x),
-          y: Number(block.y),
-          width: Number(block.width),
-          height: Number(block.height),
-          text: props.text || props.label || block.type,
-          fontSize: Number(props.fontSize) || 14,
-          customColor: props.customColor ?? null,
-          customBorder: props.customBorder ?? null,
-          properties: props
+            id: block.id,
+            type: block.type,
+            x: Number(block.x),
+            y: Number(block.y),
+            width: Number(block.width),
+            height: Number(block.height),
+            text: props.text || props.label || block.type,
+            fontSize: Number(props.fontSize) || 14,
+            customColor: props.customColor ?? null,
+            customBorder: props.customBorder ?? null,
+            properties: {
+                // Для классов убедимся, что есть массивы атрибутов и операций
+                ...(block.type === 'class' ? {
+                    attributes: Array.isArray(props.attributes) ? props.attributes : [],
+                    operations: Array.isArray(props.operations) ? props.operations : [],
+                } : {}),
+                ...props
+            }
         };
       }));
 
@@ -1508,22 +1910,32 @@ export default {
 
 
     createElement(type, x, y) {
-      const preset = this.getElementPreset(type);
-      const element = {
-        id: this.generateUUID(),
-        type: type,
-        x: this.snapCoordinates(x - (preset?.width || 120)/2, y - (preset?.height || 60)/2).x,
-        y: this.snapCoordinates(x - (preset?.width || 120)/2, y - (preset?.height || 60)/2).y,
-        width: preset?.width || 120,
-        height: preset?.height || 60,
-        text: this.getDefaultText(type),
-        fontSize: 14,
-        customColor: null,
-        customBorder: null,
-        properties: {}
-      };
-      this.elements.push(element);
-      this.selectElement(element);
+        const preset = this.getElementPreset(type);
+        const element = {
+            id: this.generateUUID(),
+            type: type,
+            x: this.snapCoordinates(x - (preset?.width || 120)/2, y - (preset?.height || 60)/2).x,
+            y: this.snapCoordinates(x - (preset?.width || 120)/2, y - (preset?.height || 60)/2).y,
+            width: preset?.width || 120,
+            height: preset?.height || 60,
+            text: this.getDefaultText(type),
+            fontSize: 14,
+            customColor: null,
+            customBorder: null,
+            properties: {}
+        };
+        
+        // Для классов инициализируем атрибуты и операции
+        if (type === 'class') {
+            element.properties = {
+                attributes: [],
+                operations: [],
+                ...element.properties
+            };
+        }
+        
+        this.elements.push(element);
+        this.selectElement(element);
     },
 
     generateUUID() {
@@ -1538,6 +1950,7 @@ export default {
 
     getDefaultText(type) {
       const texts = {
+        // Без кавычек (валидные идентификаторы)
         class: 'New Class',
         interface: 'Interface',
         enum: 'Enum',
@@ -1547,8 +1960,33 @@ export default {
         usecase: 'Use Case',
         note: 'Note',
         package: 'Package',
-        association: 'Association'
+        association: 'Association',
+        
+        // Activity Diagram элементы
+        initial: 'Start',
+        final: 'End',
+        activity: 'Activity',
+        decision: 'Decision',
+        merge: 'Merge',
+        fork: 'Fork',
+        join: 'Join',
+        send_signal: 'Send Signal', // С подчеркиванием - нужны кавычки
+        receive_signal: 'Receive Signal', // С подчеркиванием - нужны кавычки
+        
+        // Connections        '
+        // extend': 'Extend',
+        'include': 'Include',
+        
+        // Class связи
+        'dependency': 'Dependency',
+        'realization': 'Realization',
+        'aggregation': 'Aggregation',
+        
+        // Activity Diagram связи
+        'control_flow': 'Control Flow',
+        'object_flow': 'Object Flow',
       };
+
       return texts[type] || type;
     },
 
@@ -2219,5 +2657,138 @@ button.has-changes {
 .app { height: 100vh; display: flex; flex-direction: column; }
 .header { background: #2c3e50; color: white; padding: 1.25rem 1rem 1rem; display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; position: relative; z-index: 10; }
 .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, auto)); grid-auto-flow: column; grid-auto-columns: min-content; gap: 0.5rem; align-items: center; justify-content: start; width: 100%; overflow-x: auto; padding-bottom: 0.25rem; }
+.class-header {
+    font-weight: bold;
+    text-align: center;
+    padding: 6px;
+    border-bottom: 1px solid rgba(0,0,0,0.2);
+}
 
+.class-divider {
+    margin: 0;
+    border: none;
+    border-top: 1px solid rgba(0,0,0,0.2);
+}
+
+.class-section {
+    padding: 4px 8px;
+    min-height: 20px;
+}
+
+.class-section.attributes {
+    border-bottom: 1px solid rgba(0,0,0,0.1);
+}
+
+.class-line {
+    font-family: monospace;
+    font-size: 0.85em;
+    padding: 2px 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.class-placeholder {
+    color: #7f8c8d;
+    font-style: italic;
+    font-size: 0.85em;
+    text-align: center;
+    padding: 4px;
+}
+/* Стили для Activity Diagram */
+.diamond-text {
+    transform: rotate(-45deg);
+    width: 100%;
+    text-align: center;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+.element.shape-bar {
+    border-radius: 0;
+    cursor: ns-resize;
+}
+
+.element.shape-bar .element-text-main {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    transform: rotate(180deg);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) rotate(90deg);
+}
+
+/* Для ромбов делаем текст читаемым */
+.shape-diamond .diamond-text {
+    font-size: 12px !important;
+    width: 80%;
+    word-wrap: break-word;
+    line-height: 1.2;
+}
+
+/* Для маленьких элементов скрываем тип */
+.element[style*="width: 40px"] .element-type-tag,
+.element[style*="height: 40px"] .element-type-tag,
+.element.shape-bar .element-type-tag {
+    display: none;
+}
+
+/* Пятиугольник - текст по центру */
+.shape-pentagon .element-text-main {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90%;
+    text-align: center;
+    font-size: 0.9em !important;
+}
+/* Стили для ромбов (decision, merge) */
+.diamond-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    text-align: center;
+}
+
+.diamond-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    text-align: center;
+    word-wrap: break-word;
+    max-width: 90%;
+}
+
+.diamond-type {
+    font-size: 0.8em;
+    opacity: 0.8;
+    color: inherit;
+    text-transform: capitalize;
+}
+/* Стили для Actor */
+.actor-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+}
+
+.element.shape-actor {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.actor-name {
+    word-break: break-word;
+    max-width: 90%;
+}
 </style>

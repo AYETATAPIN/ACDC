@@ -21,6 +21,8 @@
       :new-diagram="newDiagram"
       :undo-diagram="undoDiagram"
       :redo-diagram="redoDiagram"
+      :can-undo="canUndo"
+      :can-redo="canRedo"
       :load-diagram="loadDiagram"
       :load-diagrams-list="loadDiagramsList"
       :adjust-zoom="adjustZoom"
@@ -495,6 +497,14 @@ export default {
       historyEntries: [],
       currentVersion: 0,
       historyCollapsed: false,
+      historyStack: [],
+      redoStack: [],
+      historySnapshotTimer: null,
+      historySnapshotDelay: 250,
+      historyLimit: 50,
+      historyReady: false,
+      isApplyingHistory: false,
+      lastHistorySignature: null,
       connectionStart: null,
       isConnecting: false,
       tempConnection: null,
@@ -533,12 +543,14 @@ export default {
     window.addEventListener('mouseleave', this.handleGlobalMouseUp);
     window.addEventListener('keydown', this.handleKeyDown);
     this.loadDiagramsList();
+    this.resetLocalHistory();
   },
 
   beforeUnmount() {
     window.removeEventListener('mouseup', this.handleGlobalMouseUp);
     window.removeEventListener('mouseleave', this.handleGlobalMouseUp);
     window.removeEventListener('keydown', this.handleKeyDown);
+    if (this.historySnapshotTimer) clearTimeout(this.historySnapshotTimer);
   },
 
   computed: {
@@ -592,15 +604,24 @@ export default {
     primarySelectedElement() {
       return this.selectedElements[0] || null;
     },
+    canUndo() {
+      if (this.historyStack.length > 1) return true;
+      return !!this.currentDiagramId && this.currentVersion > 1;
+    },
+    canRedo() {
+      if (this.redoStack.length > 0) return true;
+      return !!this.currentDiagramId && this.currentVersion < this.historyEntries.length;
+    },
   },
 
   watch: {
-    elements: { handler() { this.checkForChanges(); }, deep: true },
-    connections: { handler() { this.checkForChanges(); }, deep: true },
-    diagramName() { this.checkForChanges(); },
+    elements: { handler() { this.checkForChanges(); this.scheduleHistorySnapshot(); }, deep: true },
+    connections: { handler() { this.checkForChanges(); this.scheduleHistorySnapshot(); }, deep: true },
+    diagramName() { this.checkForChanges(); this.scheduleHistorySnapshot(); },
     diagramType() {
       this.checkForChanges();
       this.ensureToolFitsDiagram();
+      this.scheduleHistorySnapshot();
     },
     snapToGrid(newValue) {
       if (newValue) {
@@ -624,6 +645,71 @@ export default {
         const updated = nextConnections.find(conn => conn.id === this.selectedConnection.id);
         this.selectedConnection = updated || null;
       }
+    },
+
+    getHistorySnapshot() {
+      return {
+        diagramName: this.diagramName,
+        diagramType: this.diagramType,
+        elements: JSON.parse(JSON.stringify(this.elements || [])),
+        connections: JSON.parse(JSON.stringify(this.connections || []))
+      };
+    },
+
+    getHistorySignature(snapshot) {
+      return JSON.stringify(snapshot);
+    },
+
+    resetLocalHistory() {
+      this.historyReady = false;
+      if (this.historySnapshotTimer) clearTimeout(this.historySnapshotTimer);
+      this.historySnapshotTimer = null;
+      this.historyStack = [];
+      this.redoStack = [];
+      const snapshot = this.getHistorySnapshot();
+      const signature = this.getHistorySignature(snapshot);
+      this.historyStack = [signature];
+      this.lastHistorySignature = signature;
+      this.historyReady = true;
+    },
+
+    scheduleHistorySnapshot() {
+      if (!this.historyReady || this.isApplyingHistory) return;
+      if (this.historySnapshotTimer) clearTimeout(this.historySnapshotTimer);
+      this.historySnapshotTimer = setTimeout(() => {
+        this.recordHistorySnapshot();
+      }, this.historySnapshotDelay);
+    },
+
+    recordHistorySnapshot() {
+      if (!this.historyReady || this.isApplyingHistory) return;
+      const snapshot = this.getHistorySnapshot();
+      const signature = this.getHistorySignature(snapshot);
+      if (signature === this.lastHistorySignature) return;
+      this.historyStack.push(signature);
+      if (this.historyStack.length > this.historyLimit) {
+        this.historyStack.shift();
+      }
+      this.redoStack = [];
+      this.lastHistorySignature = signature;
+    },
+
+    applyLocalHistorySnapshot(signature) {
+      if (!signature) return;
+      const snapshot = JSON.parse(signature);
+      this.isApplyingHistory = true;
+      this.lastHistorySignature = signature;
+      this.setElements(snapshot.elements || []);
+      this.setConnections(snapshot.connections || []);
+      this.diagramName = snapshot.diagramName || '';
+      this.diagramType = snapshot.diagramType || 'class';
+      this.selectedElement = null;
+      this.connectionStart = null;
+      this.isConnecting = false;
+      this.deselectAll();
+      this.$nextTick(() => {
+        this.isApplyingHistory = false;
+      });
     },
 
     setDiagramName(value) {
@@ -1617,6 +1703,7 @@ export default {
           diagramType: this.diagramType
         };
         this.hasUnsavedChanges = false;
+        this.resetLocalHistory();
 
         alert('Диаграмма сохранена! Снапшот создан.');
       } catch (error) {
@@ -1638,6 +1725,8 @@ export default {
       this.historyEntries = [];
       this.currentVersion = 0;
       this.pan = { x: 0, y: 0 };
+      this.deselectAll();
+      this.resetLocalHistory();
     },
 
     async loadHistory() {
@@ -1696,6 +1785,14 @@ export default {
     },
 
     async undoDiagram() {
+      if (this.historyStack.length > 1) {
+        const current = this.historyStack.pop();
+        if (current) this.redoStack.push(current);
+        const previous = this.historyStack[this.historyStack.length - 1];
+        this.applyLocalHistorySnapshot(previous);
+        return;
+      }
+
       if (!this.currentDiagramId) {
         this.showError('Сначала создайте или загрузите диаграмму');
         return;
@@ -1733,6 +1830,15 @@ export default {
     },
 
     async redoDiagram() {
+      if (this.redoStack.length > 0) {
+        const next = this.redoStack.pop();
+        if (next) {
+          this.historyStack.push(next);
+          this.applyLocalHistorySnapshot(next);
+        }
+        return;
+      }
+
       if (!this.currentDiagramId) {
         this.showError('Сначала создайте или загрузите диаграмму');
         return;
@@ -1773,6 +1879,8 @@ export default {
       if (!snapshot) return;
 
       console.log('Applying snapshot. Blocks:', snapshot.blocks?.length, 'Connections:', snapshot.connections?.length);
+
+      this.isApplyingHistory = true;
 
       // Обновляем информацию о диаграмме
       this.diagramName = snapshot.diagram?.name || this.diagramName;
@@ -1873,8 +1981,13 @@ export default {
       this.selectedElement = null;
       this.connectionStart = null;
       this.isConnecting = false;
+      this.deselectAll();
 
       this.updateConnections();
+      this.resetLocalHistory();
+      this.$nextTick(() => {
+        this.isApplyingHistory = false;
+      });
       console.log('Applied elements:', this.elements.length, 'connections:', this.connections.length);
     },
 

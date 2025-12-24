@@ -20,8 +20,8 @@
         {{ hasUnsavedChanges ? '💾 Save*' : '💾 Save' }}
       </button>
       <button @click="newDiagram">New</button>
-      <button :disabled="!currentDiagramId" @click="undoDiagram">Undo</button>
-      <button :disabled="!currentDiagramId" @click="redoDiagram">Redo</button>
+      <button :disabled="!canUndo" @click="undoDiagram">Undo</button>
+      <button :disabled="!canRedo" @click="redoDiagram">Redo</button>
       <select :value="selectedDiagramId" @change="handleDiagramSelect" class="diagram-select">
         <option value="" disabled>Выбрать диаграмму...</option>
         <option v-for="d in diagrams" :key="d.id" :value="d.id">
@@ -68,6 +68,8 @@ export default {
     newDiagram: { type: Function, required: true },
     undoDiagram: { type: Function, required: true },
     redoDiagram: { type: Function, required: true },
+    canUndo: { type: Boolean, required: true },
+    canRedo: { type: Boolean, required: true },
     loadDiagram: { type: Function, required: true },
     loadDiagramsList: { type: Function, required: true },
     adjustZoom: { type: Function, required: true },

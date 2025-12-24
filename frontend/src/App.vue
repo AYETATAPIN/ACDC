@@ -232,14 +232,26 @@
             <p>Текущий инструмент: <strong>{{ currentTool }}</strong></p>
           </div>
 
+          <!-- Selection box -->
+          <div
+              v-if="selectionBox"
+              class="selection-box"
+              :style="{
+              left: selectionBox.x + 'px',
+              top: selectionBox.y + 'px',
+              width: selectionBox.width + 'px',
+              height: selectionBox.height + 'px'
+            }"
+          ></div>
+
           <!-- Elements -->
           <div
               v-for="element in elements"
               :key="element.id"
               class="element"
               :class="[{ 
-                  dragging: dragElement?.id === element.id, 
-                  selected: selectedElement?.id === element.id 
+                  dragging: dragElement?.id === element.id,
+                  selected: isElementSelected(element)
               }, `shape-${getElementShape(element.type)}`]"
               :style="getElementStyle(element)"
               @click.stop="handleElementClick(element)"
@@ -375,7 +387,7 @@
       </div>
 
       <DiagramPropertiesPanel
-        :selected-element="selectedElement"
+        :selected-element="primarySelectedElement"
         :selected-connection="selectedConnection"
         :selected-bend-point="selectedBendPoint"
         :get-element-preset="getElementPreset"
@@ -506,6 +518,14 @@ export default {
       bendPointDragOffset: { x: 0, y: 0 },
       selectedBendPoint: { connId: null, pointIndex: null },
 
+      selectedElements: [],          // array of selected elements (replaces single selectedElement for multi)
+      isMultiSelectDragging: false, // are we dragging the whole group?
+      multiDragOffset: { x: 0, y: 0 }, // offset from mouse to group centre
+      selectionBox: null,            // {x, y, width, height} for drag-select rectangle
+      selectionBoxStart: null,       // start point of selection box
+      // Prevent deselection right after drag or selection box
+      justInteracted: false,
+
     }
   },
   mounted() {
@@ -522,9 +542,6 @@ export default {
   },
 
   computed: {
-    availableElementTools() {
-      return this.elementPresets.filter(p => p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode');
-    },
     availableConnectionTools() {
       // Получаем все связи для текущего типа диаграммы
       const allConnections = this.connectionPresets.filter(p => 
@@ -563,6 +580,17 @@ export default {
             !['select', 'delete'].includes(p.type) && 
             (p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode')
         );
+    },
+
+    isElementSelected() {
+      return (element) => {
+        return this.selectedElements.some(el => el.id === element.id);
+      };
+    },
+
+    // Helper: primary selected element (first one) – used for properties panel
+    primarySelectedElement() {
+      return this.selectedElements[0] || null;
     },
   },
 
@@ -887,12 +915,14 @@ export default {
     },
 
     showError(message) {
-      console.error('Error:', message);
+      console.warn('Diagram error:', message);
       this.errorMessage = message;
-      // Автоматически скрываем ошибку через 5 секунд
-      setTimeout(() => {
+
+      // Auto-clear after 6 seconds
+      if (this.errorTimeout) clearTimeout(this.errorTimeout);
+      this.errorTimeout = setTimeout(() => {
         this.errorMessage = null;
-      }, 5000);
+      }, 6000);
     },
 
     handleGlobalMouseUp(event) {
@@ -923,6 +953,12 @@ export default {
     },
 
     handleCanvasClick(event) {
+      // Ignore clicks right after drag or selection box
+      if (this.justInteracted) {
+        this.justInteracted = false;
+        return;
+      }
+
       if (this.currentTool === 'select' || this.currentTool === 'delete') {
         this.deselectAll();
         return;
@@ -934,33 +970,40 @@ export default {
       const {x, y} = this.getCanvasCoords(event);
       const clickedElement = this.getElementAtPosition(x, y);
 
-      if (clickedElement) return;
+      if (clickedElement) return; // click handled by element click
 
+      // Only cancel connection mode if clicking empty space
       if (this.isConnectionTool(this.currentTool)) {
         this.connectionStart = null;
         this.isConnecting = false;
-        if (this.selectedElement && this.selectedElement.id === this.connectionStart?.id) {
-          this.selectedElement = null;
-        }
         this.currentTool = this.defaultToolForDiagram();
       } else {
         this.createElement(this.currentTool, x, y);
       }
     },
 
-    handleElementClick(element) {
+    handleElementClick(element, event) {
+      // Ignore clicks right after drag (prevents deselection)
+      if (this.justInteracted) {
+        return;
+      }
+
+      // 1. Connection tool has highest priority
+      if (this.isConnectionTool(this.currentTool)) {
+        const x = element.x + element.width / 2;
+        const y = element.y + element.height / 2;
+        this.handleConnectionMode(x, y);
+        return;
+      }
+
+      // 2. Delete tool
       if (this.currentTool === 'delete') {
         this.deleteElement(element);
         return;
       }
 
-      if (this.isConnectionTool(this.currentTool)) {
-        const x = element.x + element.width / 2;
-        const y = element.y + element.height / 2;
-        this.handleConnectionMode(x, y);
-      } else {
-        this.selectElement(element);
-      }
+      // 3. Normal selection (only if not connection tool)
+      this.selectElement(element, event);
     },
 
     deleteElement(element) {
@@ -1008,67 +1051,106 @@ export default {
     },
 
     handleConnectionMode(x, y) {
-      if (!this.isConnectionTool(this.currentTool)) {
-        return;
-      }
+      if (!this.isConnectionTool(this.currentTool)) return;
 
       const clickedElement = this.getElementAtPosition(x, y);
 
       if (!clickedElement) {
         this.connectionStart = null;
         this.isConnecting = false;
-        console.log('Clicked outside element - connection cancelled');
         return;
       }
 
       if (!this.connectionStart) {
+        // First click: select starting element
         this.connectionStart = clickedElement;
         this.isConnecting = true;
-        console.log('First element selected:', clickedElement);
-      } else {
-        if (this.connectionStart.id !== clickedElement.id) {
-          const connType = this.currentTool;
-          if (!this.isConnectionAllowed(this.connectionStart, clickedElement, connType)) {
-            const message = this.connectionRuleMessage(this.connectionStart, clickedElement, connType);
-            this.showError(message);
-            console.warn('Connection rejected:', message);
-          } else {
-            this.createConnection(this.connectionStart, clickedElement);
-            console.log('Connection created between:', this.connectionStart, 'and', clickedElement);
-          }
+        console.log('Connection start:', clickedElement.text);
+      } else if (this.connectionStart.id !== clickedElement.id) {
+        // Second click: try to create connection
+        const allowed = this.isConnectionAllowed(this.connectionStart, clickedElement, this.currentTool);
+        if (allowed) {
+          this.createConnection(this.connectionStart, clickedElement);
+          console.log('Connection created:', this.currentTool);
         } else {
-          console.log('Cannot connect element to itself');
+          this.showError(this.connectionRuleMessage(this.connectionStart, clickedElement, this.currentTool));
+          console.warn('Connection blocked:', this.connectionRuleMessage(this.connectionStart, clickedElement, this.currentTool));
         }
 
+        // Reset connection mode
+        this.connectionStart = null;
+        this.isConnecting = false;
+      } else {
+        // Clicked same element twice → cancel
         this.connectionStart = null;
         this.isConnecting = false;
       }
     },
 
     handleMouseDown(event) {
-      // Middle button или Alt+ЛКМ — панорамирование холста
+      // Middle button or Alt+click = pan
       if (event.button === 1 || event.altKey) {
         this.isPanning = true;
-        this.panStart = {...this.pan};
+        this.panStart = { ...this.pan };
         this.pointerStart = { x: event.clientX, y: event.clientY };
         return;
       }
 
-      const {x, y} = this.getCanvasCoords(event);
-
+      const { x, y } = this.getCanvasCoords(event);
       const element = this.getElementAtPosition(x, y);
 
+      // 1. Start selection box (only when tool = select, no element under cursor, no Shift)
+      if (!element && !event.shiftKey && this.currentTool === 'select') {
+        this.selectionBoxStart = { x, y };
+        this.selectionBox = { x, y, width: 0, height: 0 };
+        this.deselectAll(); // clear previous selection
+        this.justInteracted = true;
+        return;
+      }
+
+      // 2. Clicked on an element
       if (element && !this.isConnecting) {
-        this.dragElement = element;
-        this.dragOffset.x = x - element.x;
-        this.dragOffset.y = y - element.y;
-        this.isDragging = true;
+        // If connection tool is active → do NOT select or start drag, let handleElementClick handle it
+        if (this.isConnectionTool(this.currentTool)) {
+          // Do nothing here — connection will be handled in handleElementClick via @click
+          return;
+        }
 
-        this.selectedElement = element;
+        // Normal case: select tool or element tool → handle selection and drag
+        const alreadySelected = this.selectedElements.some(el => el.id === element.id);
+        const hasMultiple = this.selectedElements.length > 1;
 
-        console.log('Start dragging:', element);
+        // If clicking on already multi-selected element → start group drag without changing selection
+        if (hasMultiple && alreadySelected) {
+          this.isMultiSelectDragging = true;
+          const center = this.getSelectionCenter();
+          this.multiDragOffset = { x: x - center.x, y: y - center.y };
+          this.justInteracted = true;
+          event.preventDefault();
+          return;
+        }
+
+        // Otherwise: normal selection logic
+        this.selectElement(element, event);
+
+        // After selection — prepare drag (single or multi)
+        if (this.selectedElements.length > 1) {
+          this.isMultiSelectDragging = true;
+          const center = this.getSelectionCenter();
+          this.multiDragOffset = { x: x - center.x, y: y - center.y };
+          this.justInteracted = true;
+        } else {
+          this.dragElement = element;
+          this.dragOffset.x = x - element.x;
+          this.dragOffset.y = y - element.y;
+          this.isDragging = true;
+          this.justInteracted = true;
+        }
+
         event.preventDefault();
       }
+
+      // 3. Clicked on empty space — handled by handleCanvasClick
     },
 
     handleMouseMove(event) {
@@ -1103,6 +1185,50 @@ export default {
         return;
       }
 
+      // Selection box update
+      if (this.selectionBoxStart) {
+        const { x, y } = this.getCanvasCoords(event);
+        const start = this.selectionBoxStart;
+        this.selectionBox = {
+          x: Math.min(start.x, x),
+          y: Math.min(start.y, y),
+          width: Math.abs(x - start.x),
+          height: Math.abs(y - start.y)
+        };
+        this.updateSelectionFromBox();
+        return;
+      }
+
+      // Multi-select group drag
+      if (this.isMultiSelectDragging && this.selectedElements.length > 1) {
+          const { x, y } = this.getCanvasCoords(event);
+          const center = this.getSelectionCenter();
+          const deltaX = x - center.x - this.multiDragOffset.x;
+          const deltaY = y - center.y - this.multiDragOffset.y;
+
+          // Move selected elements
+          this.selectedElements.forEach(el => {
+            const snapped = this.snapCoordinates(el.x + deltaX, el.y + deltaY);
+            el.x = snapped.x;
+            el.y = snapped.y;
+          });
+
+          // === NEW: Rigidly move ALL points (including middle bend points) of connections where BOTH ends are selected ===
+          this.connections.forEach(conn => {
+            const fromSelected = this.selectedElements.some(el => el.id === conn.from);
+            const toSelected = this.selectedElements.some(el => el.id === conn.to);
+
+            // Only move the entire line if BOTH endpoints are in the selected group
+            if (fromSelected && toSelected && Array.isArray(conn.points) && conn.points.length > 0) {
+              conn.points = conn.points.map(pt => ({
+                x: this.snapToGrid ? Math.round((pt.x + deltaX) / this.gridSize) * this.gridSize : pt.x + deltaX,
+                y: this.snapToGrid ? Math.round((pt.y + deltaY) / this.gridSize) * this.gridSize : pt.y + deltaY
+              }));
+            }
+          });
+
+      }
+
       if (this.isPanning) {
         const dx = event.clientX - this.pointerStart.x;
         const dy = event.clientY - this.pointerStart.y;
@@ -1124,13 +1250,60 @@ export default {
     },
 
     handleMouseUp() {
-      this.handleGlobalMouseUp(); // Используем общий метод
+      this.handleGlobalMouseUp(); // Останавливаем все драги
+
+      // НЕ сбрасываем justInteracted здесь!
+      // Сбрасываем его ЧУТЬ ПОЗЖЕ — после того, как click-событие успеет отработать
+
       if (this.resizingElement) {
         this.resizingElement = null;
       }
       if (this.isPanning) {
         this.isPanning = false;
       }
+      if (this.selectionBoxStart) {
+        this.selectionBoxStart = null;
+        this.selectionBox = null;
+      }
+      if (this.isMultiSelectDragging) {
+        this.isMultiSelectDragging = false;
+      }
+
+      // Сбрасываем флаг с небольшой задержкой — после того, как click уже отработает
+      setTimeout(() => {
+        this.justInteracted = false;
+      }, 50);  // 50 мс достаточно, чтобы click прошёл
+    },
+
+    getSelectionCenter() {
+      if (this.selectedElements.length === 0) return { x: 0, y: 0 };
+      const sum = this.selectedElements.reduce((acc, el) => ({
+        x: acc.x + el.x + el.width / 2,
+        y: acc.y + el.y + el.height / 2
+      }), { x: 0, y: 0 });
+      return {
+        x: sum.x / this.selectedElements.length,
+        y: sum.y / this.selectedElements.length
+      };
+    },
+
+    updateSelectionFromBox() {
+      if (!this.selectionBox || this.selectionBox.width < 5) {
+        return;
+      }
+      const box = this.selectionBox;
+      const selected = this.elements.filter(el =>
+          el.x + el.width > box.x &&
+          el.x < box.x + box.width &&
+          el.y + el.height > box.y &&
+          el.y < box.y + box.height
+      );
+      this.selectedElements = selected;
+    },
+
+// Update element visual selection class
+    isElementSelected(element) {
+      return this.selectedElements.some(el => el.id === element.id);
     },
 
     updateConnections() {
@@ -1143,10 +1316,11 @@ export default {
         const end = this.getAnchorPoint(toElement, fromElement);
 
         let points = Array.isArray(conn.points) ? conn.points.slice() : [];
+
         if (points.length < 2) {
           points = [start, end];
         } else {
-          // update endpoints only, keep middle points as user-defined bend points
+          // ONLY update first and last point — preserve all manual middle bend points
           points[0] = start;
           points[points.length - 1] = end;
         }
@@ -1218,111 +1392,124 @@ export default {
     },
 
     isConnectionAllowed(fromElement, toElement, connectionType) {
+      if (!fromElement || !toElement || fromElement.id === toElement.id) return false;
       if (this.diagramType === 'free_mode') return true;
 
+      const fromType = fromElement.type;
+      const toType = toElement.type;
+
+      // Helper sets
+      const classLike = ['class', 'interface', 'enum', 'component', 'database'];
+      const structural = [...classLike, 'package', 'note'];
+      const usecaseLike = ['usecase'];
+      const actorLike = ['actor'];
+      const ucElements = [...usecaseLike, ...actorLike, 'package', 'note'];
+      const activityElements = ['initial', 'final', 'activity', 'decision', 'merge', 'fork', 'join', 'send_signal', 'receive_signal'];
+
       if (this.diagramType === 'class') {
-        // Для Class диаграммы разрешаем только между структурными элементами
-        if (!this.isClassLike(fromElement) || !this.isClassLike(toElement)) {
-          return false;
+        // All elements must be valid for class diagram
+        if (!structural.includes(fromType) || !structural.includes(toType)) return false;
+
+        // Note can only have association or dependency
+        if (fromType === 'note' || toType === 'note') {
+          return ['association', 'dependency'].includes(connectionType);
         }
-        
-        // Разрешенные связи для Class диаграммы
-        const allowedClassConnections = [
-          'association', 'inheritance', 'composition', 
-          'dependency', 'realization', 'aggregation'
-        ];
-        
-        return allowedClassConnections.includes(connectionType);
+
+        // Package can have any connection
+        if (fromType === 'package' || toType === 'package') {
+          return true; // all types allowed with package
+        }
+
+        switch (connectionType) {
+          case 'association':
+          case 'dependency':
+            return true; // allowed between any structural
+          case 'inheritance':
+          case 'composition':
+          case 'aggregation':
+            return classLike.includes(fromType) && classLike.includes(toType);
+          case 'realization':
+            return classLike.includes(fromType) && toType === 'interface';
+          default:
+            return false;
+        }
       }
 
       if (this.diagramType === 'use_case') {
-        // Для Use Case диаграммы разрешаем только между Use Case элементами
-        if (!this.isUseCaseElement(fromElement) || !this.isUseCaseElement(toElement)) {
-          return false;
+        if (!ucElements.includes(fromType) || !ucElements.includes(toType)) return false;
+
+        // Actor cannot connect to another Actor
+        if (fromType === 'actor' && toType === 'actor') return false;
+
+        // Note only association/dependency
+        if (fromType === 'note' || toType === 'note') {
+          return ['association', 'dependency'].includes(connectionType);
         }
-        
-        // Разрешенные связи для Use Case диаграммы
-        const allowedUseCaseConnections = [
-          'association', 'dependency', 'extend', 'include'
-        ];
-        
-        return allowedUseCaseConnections.includes(connectionType);
+
+        // Extend and Include only between usecase
+        if (connectionType === 'extend' || connectionType === 'include') {
+          return fromType === 'usecase' && toType === 'usecase';
+        }
+
+        // Association and Dependency allowed everywhere (except actor-actor)
+        if (connectionType === 'association' || connectionType === 'dependency') {
+          return true;
+        }
+
+        return false;
       }
 
       if (this.diagramType === 'activity_diagram') {
-        // Для Activity Diagram разрешаем только между Activity элементами
-        if (!this.isActivityElement(fromElement) || !this.isActivityElement(toElement)) {
-          return false;
-        }
-        
-        // Разрешенные связи для Activity Diagram
-        const allowedActivityConnections = [
-          'control_flow', 'object_flow'
-        ];
-        
-        return allowedActivityConnections.includes(connectionType);
+        if (!activityElements.includes(fromType) || !activityElements.includes(toType)) return false;
+
+        // Final node cannot have outgoing connections
+        if (fromType === 'final') return false;
+
+        // Control Flow and Object Flow allowed between any activity elements
+        return ['control_flow', 'object_flow'].includes(connectionType);
       }
 
       return false;
     },
 
     connectionRuleMessage(fromElement, toElement, connectionType) {
+      const from = fromElement.text || fromElement.type;
+      const to = toElement.text || toElement.type;
+
       if (this.diagramType === 'class') {
-        if (!this.isClassLike(fromElement) || !this.isClassLike(toElement)) {
-          return 'В Class диаграмме можно соединять только структурные элементы: классы, интерфейсы, перечисления, компоненты, базы данных, пакеты и заметки.';
+        if (fromElement.type === 'note' || toElement.type === 'note') {
+          return `Заметка (Note) может соединяться только Ассоциацией или Зависимостью.`;
         }
-        
-        const allowedClassConnections = [
-          'association', 'inheritance', 'composition', 
-          'dependency', 'realization', 'aggregation'
-        ];
-        
-        if (!allowedClassConnections.includes(connectionType)) {
-          return 'В Class диаграмме допустимы только: Association, Inheritance, Composition, Dependency, Realization, Aggregation.';
+        if (connectionType === 'realization') {
+          return `Реализация (Realization) возможна только от класса к интерфейсу.`;
         }
-        
-        return 'Connection allowed';
+        if (['inheritance', 'composition', 'aggregation'].includes(connectionType)) {
+          return `${connectionType} возможна только между классами, интерфейсами, перечислениями, компонентами или БД.`;
+        }
+        return `Тип связи "${connectionType}" запрещён в Class-диаграмме или между этими элементами.`;
       }
 
       if (this.diagramType === 'use_case') {
-        if (!this.isUseCaseElement(fromElement) || !this.isUseCaseElement(toElement)) {
-          return 'В Use Case диаграмме можно соединять только: Actor, Use Case, Package, Note.';
+        if (fromElement.type === 'actor' && toElement.type === 'actor') {
+          return `Актор не может соединяться с другим Актором.`;
         }
-        
-        const allowedUseCaseConnections = [
-          'association', 'dependency', 'extend', 'include'
-        ];
-        
-        if (!allowedUseCaseConnections.includes(connectionType)) {
-          return 'В Use Case диаграмме допустимы только: Association, Dependency, Extend, Include.';
+        if (fromElement.type === 'note' || toElement.type === 'note') {
+          return `Заметка в Use Case может соединяться только Ассоциацией или Зависимостью.`;
         }
-        
-        // Особые правила для Extend и Include
-        if ((connectionType === 'extend' || connectionType === 'include') && 
-            (!fromElement?.type === 'usecase' || !toElement?.type === 'usecase')) {
-          return 'Extend и Include работают только между Use Case элементами.';
+        if (['extend', 'include'].includes(connectionType)) {
+          return `«${connectionType}» возможно только между Вариантами использования (Use Case).`;
         }
-        
-        return 'Connection allowed';
+        return `Этот тип связи запрещён в Use Case-диаграмме.`;
       }
 
       if (this.diagramType === 'activity_diagram') {
-        if (!this.isActivityElement(fromElement) || !this.isActivityElement(toElement)) {
-          return 'В Activity Diagram можно соединять только элементы Activity Diagram.';
+        if (fromElement.type === 'final') {
+          return `Из конечного состояния (Final) нельзя проводить исходящие связи.`;
         }
-        
-        const allowedActivityConnections = [
-          'control_flow', 'object_flow'
-        ];
-        
-        if (!allowedActivityConnections.includes(connectionType)) {
-          return 'В Activity Diagram допустимы только Control Flow и Object Flow связи.';
-        }
-        
-        return 'Connection allowed';
+        return `Этот тип связи запрещён в Activity-диаграмме.`;
       }
 
-      return 'Такое соединение не поддерживается для выбранного типа диаграммы.';
+      return `Соединение от "${from}" к "${to}" типа "${connectionType}" запрещено в текущей диаграмме.`;
     },
 
     createConnection(fromElement, toElement) {
@@ -1695,10 +1882,21 @@ export default {
       return `<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><!-- rendered elements --></svg>`
     },
 
-    selectElement(element) {
+    selectElement(element, event = { shiftKey: false }) {
       if (this.isConnecting) return;
-      this.selectedElement = element;
-      this.selectedConnection = null; // deselect connection if any
+
+      if (event.shiftKey) {
+        const already = this.selectedElements.some(el => el.id === element.id);
+        if (already) {
+          this.selectedElements = this.selectedElements.filter(el => el.id !== element.id);
+        } else {
+          this.selectedElements = [...this.selectedElements, element];
+        }
+      } else {
+        this.selectedElements = [element];
+      }
+
+      this.selectedConnection = null;
       this.selectedBendPoint = { connId: null, pointIndex: null };
     },
 
@@ -1721,9 +1919,10 @@ export default {
     },
 
     deselectAll() {
-      this.selectedElement = null;
+      this.selectedElements = [];
       this.selectedConnection = null;
       this.selectedBendPoint = { connId: null, pointIndex: null };
+      this.selectionBox = null;
     },
 
     handleResizeMouseDown(element, event) {
@@ -2790,5 +2989,20 @@ button.has-changes {
 .actor-name {
     word-break: break-word;
     max-width: 90%;
+}
+
+.selection-box {
+  position: absolute;
+  border: 2px dashed #3498db;
+  background: rgba(52, 152, 219, 0.1);
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* Highlight multi-selected elements */
+.element.selected {
+  outline: 3px solid #e74c3c !important;
+  outline-offset: 2px;
+  z-index: 10;
 }
 </style>

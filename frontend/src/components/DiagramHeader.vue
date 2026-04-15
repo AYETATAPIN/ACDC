@@ -1,57 +1,84 @@
 <template>
-  <header class="header">
-    <div class="logo-placeholder"></div>
-    <div class="controls">
-      <input :value="diagramName" placeholder="Diagram name" @input="setDiagramName($event.target.value)">
-      <select :value="diagramType" @change="setDiagramType($event.target.value)">
-        <option value="class">Class</option>
-        <option value="use_case">Use Case</option>
-        <option value="activity_diagram">Activity Diagram</option>
-        <option value="free_mode">Free Mode</option>
-      </select>
-      <button
-        @click="toggleGrid"
-        :class="{ active: snapToGrid }"
-        :title="snapToGrid ? 'Привязка к сетке: ВКЛ' : 'Привязка к сетке: ВЫКЛ'"
-      >
-        {{ snapToGrid ? '📐 Сетка: ВКЛ' : '📏 Сетка: ВЫКЛ' }}
-      </button>
-      <button @click="saveDiagram" :class="{ 'has-changes': hasUnsavedChanges }">
-        {{ hasUnsavedChanges ? '💾 Save*' : '💾 Save' }}
-      </button>
-      <button @click="newDiagram">New</button>
-      <button :disabled="!currentDiagramId" @click="undoDiagram">Undo</button>
-      <button :disabled="!currentDiagramId" @click="redoDiagram">Redo</button>
-      <select :value="selectedDiagramId" @change="handleDiagramSelect" class="diagram-select">
-        <option value="" disabled>Выбрать диаграмму...</option>
-        <option v-for="d in diagrams" :key="d.id" :value="d.id">
-          {{ d.name }} ({{ d.type }})
-        </option>
-      </select>
-      <button @click="loadDiagramsList" :disabled="isLoadingList">↻</button>
-      <div class="canvas-size-controls">
-        <button type="button" @click="adjustZoom(-0.1)">−</button>
-        <div style="min-width:60px;text-align:center;">{{ Math.round(zoom * 100) }}%</div>
-        <button type="button" @click="adjustZoom(0.1)">+</button>
+  <header class="header-shell">
+    <div class="header-main">
+      <div class="row">
+        <div class="field">
+          <label>Название</label>
+          <InputText :modelValue="diagramName" placeholder="Название диаграммы" @update:modelValue="setDiagramName" />
+        </div>
+        <div class="field">
+          <label>Тип</label>
+          <Dropdown
+            :modelValue="diagramType"
+            :options="typeOptions"
+            optionLabel="label"
+            optionValue="value"
+            @update:modelValue="setDiagramType"
+          />
+        </div>
+        <div class="field">
+          <label>Масштаб</label>
+          <div class="zoom-controls">
+            <Button icon="pi pi-search-minus" text @click="adjustZoom(-0.1)" />
+            <span>{{ Math.round(zoom * 100) }}%</span>
+            <Button icon="pi pi-search-plus" text @click="adjustZoom(0.1)" />
+          </div>
+        </div>
       </div>
-      <button
-        :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
-        @click="selectedBendPoint?.connId ? removeSelectedBendPoint() : (selectedConnection && removeLastBendPoint(selectedConnection))"
-      >
-        Удалить точку
-      </button>
+
+      <div class="row actions">
+        <Button :label="snapToGrid ? 'Сетка: вкл' : 'Сетка: выкл'" :severity="snapToGrid ? 'success' : 'secondary'" outlined @click="toggleGrid" />
+        <Button icon="pi pi-save" :label="hasUnsavedChanges ? 'Сохранить *' : 'Сохранить'" :severity="hasUnsavedChanges ? 'warning' : 'primary'" @click="saveDiagram" />
+        <Button icon="pi pi-plus" label="Новая" outlined @click="newDiagram" />
+        <Button icon="pi pi-undo" label="Undo" outlined :disabled="!canUndo" @click="undoDiagram" />
+        <Button icon="pi pi-redo" label="Redo" outlined :disabled="!canRedo" @click="redoDiagram" />
+        <Button :icon="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'" :label="isDarkTheme ? 'Светлая тема' : 'Темная тема'" outlined @click="toggleTheme" />
+        <Button icon="pi pi-sitemap" label="Правила и типы" severity="help" outlined @click="openRulesDialog" />
+      </div>
+
+      <div class="row">
+        <div class="field long">
+          <label>Сохраненные диаграммы</label>
+          <Dropdown
+            :modelValue="selectedDiagramId"
+            :options="diagramOptions"
+            optionLabel="label"
+            optionValue="value"
+            placeholder="Выбрать диаграмму..."
+            @update:modelValue="onDiagramSelect"
+          />
+        </div>
+        <Button icon="pi pi-refresh" outlined :loading="isLoadingList" @click="loadDiagramsList" />
+        <Button
+          v-if="isBendEditMode"
+          icon="pi pi-minus-circle"
+          label="Удалить точку изгиба"
+          outlined
+          :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
+          @click="selectedBendPoint?.connId ? removeSelectedBendPoint() : (selectedConnection && removeLastBendPoint(selectedConnection))"
+        />
+      </div>
     </div>
   </header>
 </template>
 
 <script>
+import InputText from 'primevue/inputtext';
+import Dropdown from 'primevue/dropdown';
+import Button from 'primevue/button';
+
 export default {
   name: 'DiagramHeader',
+  components: { InputText, Dropdown, Button },
   props: {
     diagramName: { type: String, required: true },
     diagramType: { type: String, required: true },
     snapToGrid: { type: Boolean, required: true },
     hasUnsavedChanges: { type: Boolean, required: true },
+    canUndo: { type: Boolean, required: true },
+    canRedo: { type: Boolean, required: true },
+    isDarkTheme: { type: Boolean, required: true },
+    isBendEditMode: { type: Boolean, required: true },
     currentDiagramId: { type: String, default: null },
     selectedDiagramId: { type: String, default: null },
     diagrams: { type: Array, default: () => [] },
@@ -72,16 +99,90 @@ export default {
     loadDiagramsList: { type: Function, required: true },
     adjustZoom: { type: Function, required: true },
     removeSelectedBendPoint: { type: Function, required: true },
-    removeLastBendPoint: { type: Function, required: true }
+    removeLastBendPoint: { type: Function, required: true },
+    openRulesDialog: { type: Function, required: true },
+    toggleTheme: { type: Function, required: true },
+  },
+  computed: {
+    typeOptions() {
+      return [
+        { label: 'Class', value: 'class' },
+        { label: 'Use Case', value: 'use_case' },
+        { label: 'Activity', value: 'activity_diagram' },
+        { label: 'Free Mode', value: 'free_mode' },
+      ];
+    },
+    diagramOptions() {
+      return this.diagrams.map((d) => ({ value: d.id, label: `${d.name} (${d.type})` }));
+    },
   },
   methods: {
-    handleDiagramSelect(event) {
-      const value = event.target.value || null;
-      this.setSelectedDiagramId(value);
+    onDiagramSelect(value) {
+      this.setSelectedDiagramId(value || null);
       if (value) {
         this.loadDiagram(value);
       }
-    }
-  }
+    },
+  },
 };
 </script>
+
+<style scoped>
+.header-shell {
+  border-bottom: 1px solid var(--app-border, #dbe7ef);
+  background: linear-gradient(120deg, var(--app-bg-0, #f3f9fa) 0%, var(--app-bg-1, #eef6fb) 65%, var(--app-bg-2, #fff6ec) 100%);
+  padding: 0.9rem;
+}
+
+.header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  align-items: flex-end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 190px;
+}
+
+.field.long {
+  flex: 1;
+  min-width: 320px;
+}
+
+.field label {
+  font-size: 0.75rem;
+  color: var(--app-muted, #334155);
+  font-weight: 600;
+}
+
+.zoom-controls {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--app-border, #d2dbe6);
+  border-radius: 8px;
+  padding: 0.1rem 0.25rem;
+  background: var(--app-panel, #ffffff);
+  gap: 0.2rem;
+}
+
+.zoom-controls span {
+  min-width: 56px;
+  text-align: center;
+  font-weight: 600;
+  color: var(--app-text, #0f172a);
+}
+
+.actions {
+  align-items: center;
+}
+</style>

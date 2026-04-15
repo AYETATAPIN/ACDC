@@ -1,4 +1,4 @@
-#!/bin/bash
+﻿#!/bin/bash
 set -euo pipefail
 
 SQL_FILE=${1:-sql/updates/2024-10-01-add-connection-properties.sql}
@@ -25,3 +25,4 @@ fi
 
 echo "Running schema update via psql..."
 PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f "$SQL_FILE"
+

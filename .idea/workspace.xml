@@ -5,8 +5,72 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="ed7434b9-4ade-4d51-9247-ccd3b3c2aa38" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.dockerignore" beforeDir="false" afterPath="$PROJECT_DIR$/.dockerignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/auto-test.sh" beforeDir="false" afterPath="$PROJECT_DIR$/auto-test.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/docker-compose.yml" beforeDir="false" afterPath="$PROJECT_DIR$/docker-compose.yml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/fix-all-errors.sh" beforeDir="false" afterPath="$PROJECT_DIR$/fix-all-errors.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/package.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/App.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramCanvas.vue" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramHeader.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramHeader.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramHistoryPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramHistoryPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramPropertiesPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramPropertiesPanel.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramToolbar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramToolbar.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramsList.vue" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/PropertiesPanel.vue" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/Toolbar.vue" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/composables/useDiagramEditor.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/main.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/main.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/utils/bendPoints.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/utils/bendPoints.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/vite.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/vite.config.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/project_structure.txt" beforeDir="false" afterPath="$PROJECT_DIR$/project_structure.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/assets/index-C7sUiycG.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/assets/index-Cu9Qr1-u.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/public/index.html" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/quick.sh" beforeDir="false" afterPath="$PROJECT_DIR$/quick.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/check-undo-redo.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/check-undo-redo.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/scripts/update-schema.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/update-schema.sh" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sql/init.sql" beforeDir="false" afterPath="$PROJECT_DIR$/sql/init.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sql/updates/2024-10-01-add-connection-properties.sql" beforeDir="false" afterPath="$PROJECT_DIR$/sql/updates/2024-10-01-add-connection-properties.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/app.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/controllers/diagramBlockController.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/controllers/diagramBlockController.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/controllers/diagramConnectionController.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/controllers/diagramConnectionController.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/controllers/diagramController.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/controllers/diagramController.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/controllers/diagramHistoryController.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/controllers/diagramHistoryController.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/db.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/db.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/index.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/middleware/asyncHandler.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/middleware/asyncHandler.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/middleware/errorHandler.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/middleware/errorHandler.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/middleware/validateUUID.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/middleware/validateUUID.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/repositories/diagramBlockRepository.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/repositories/diagramBlockRepository.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/repositories/diagramConnectionRepository.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/repositories/diagramConnectionRepository.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/repositories/diagramRepository.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/repositories/diagramRepository.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/diagramBlocks.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/diagramBlocks.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/diagramConnections.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/diagramConnections.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/diagramHistory.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/diagramHistory.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/diagrams.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/diagrams.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/diagramBlockService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramBlockService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/diagramConnectionService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramConnectionService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/diagramHistoryService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramHistoryService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/diagramService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/types.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/types.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/utils/validators.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/validators.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/bend-points.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/test/bend-points.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test/history.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/test/history.test.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/test_ids.env" beforeDir="false" afterPath="$PROJECT_DIR$/test_ids.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/tsconfig.json" beforeDir="false" afterPath="$PROJECT_DIR$/tsconfig.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/undo-redo-test.sh" beforeDir="false" afterPath="$PROJECT_DIR$/undo-redo-test.sh" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,6 +108,10 @@
             <RecentBranchesForRepo>
               <option name="branches">
                 <list>
+                  <RecentBranch>
+                    <option name="branchName" value="featue/fe_fixes" />
+                    <option name="lastUsedInstant" value="1776225350" />
+                  </RecentBranch>
                   <RecentBranch>
                     <option name="branchName" value="feature/multiselection" />
                     <option name="lastUsedInstant" value="1766520713" />
@@ -87,7 +155,7 @@
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "feature/multiselection",
+    "git-widget-placeholder": "featue/fe__fixes",
     "ignore.virus.scanning.warn.message": "true",
     "last_opened_file_path": "D:/prg/frontik/ACDC/app",
     "node.js.detected.package.eslint": "true",
@@ -144,6 +212,8 @@
       <workItem from="1765122904780" duration="4478000" />
       <workItem from="1765950752008" duration="3980000" />
       <workItem from="1766517923703" duration="4291000" />
+      <workItem from="1776183643022" duration="3412000" />
+      <workItem from="1776223484031" duration="6219000" />
     </task>
     <servers />
   </component>

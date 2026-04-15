@@ -74,7 +74,6 @@
            @mousedown="handleMouseDown"
            @mousemove="handleMouseMove"
            @mouseup="handleMouseUp"
-           @mouseleave="handleMouseUp"
            @wheel.prevent="handleWheel"
       >
         <div class="canvas-inner" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, width: canvasWidth + 'px', height: canvasHeight + 'px', transformOrigin: '0 0' }">
@@ -639,6 +638,7 @@ export default {
     }
   },
   mounted() {
+    window.addEventListener('mousemove', this.handleGlobalMouseMove);
     window.addEventListener('mouseup', this.handleGlobalMouseUp);
     window.addEventListener('mouseleave', this.handleGlobalMouseUp);
     window.addEventListener('keydown', this.handleKeyDown);
@@ -649,6 +649,7 @@ export default {
   },
 
   beforeUnmount() {
+    window.removeEventListener('mousemove', this.handleGlobalMouseMove);
     window.removeEventListener('mouseup', this.handleGlobalMouseUp);
     window.removeEventListener('mouseleave', this.handleGlobalMouseUp);
     window.removeEventListener('keydown', this.handleKeyDown);
@@ -1293,6 +1294,18 @@ export default {
       this.errorTimeout = setTimeout(() => {
         this.errorMessage = null;
       }, 6000);
+    },
+
+    handleGlobalMouseMove(event) {
+      const hasActiveDrag =
+        Boolean(this.isDragging && this.dragElement) ||
+        Boolean(this.isMultiSelectDragging && this.selectedElements.length > 0) ||
+        Boolean(this.resizingElement) ||
+        Boolean(this.draggingBendPoint.connId) ||
+        Boolean(this.draggingEndpoint.connId) ||
+        Boolean(this.isPanning);
+      if (!hasActiveDrag) return;
+      this.handleMouseMove(event);
     },
 
     handleGlobalMouseUp(event) {

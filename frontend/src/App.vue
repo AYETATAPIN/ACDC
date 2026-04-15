@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="app">
     <DiagramHeader
       :diagram-name="diagramName"
@@ -69,8 +69,7 @@
 
       <div class="canvas"
            :style="{ background: snapToGrid ? `linear-gradient(90deg, ${themeMode === 'dark' ? '#4b5563' : '#d7dde6'} 1px, transparent 1px), linear-gradient(${themeMode === 'dark' ? '#4b5563' : '#d7dde6'} 1px, transparent 1px), ${themeMode === 'dark' ? '#111827' : '#ffffff'}` : (themeMode === 'dark' ? '#111827' : '#ffffff'),
-                     backgroundSize: snapToGrid ? `${gridSize}px ${gridSize}px` : 'auto',
-                     height: canvasHeight + 'px' }"
+                     backgroundSize: snapToGrid ? `${gridSize}px ${gridSize}px` : 'auto' }"
            @click="handleCanvasClick"
            @mousedown="handleMouseDown"
            @mousemove="handleMouseMove"
@@ -279,8 +278,8 @@
 
           <!-- Canvas hint -->
           <div style="padding: 20px; color: #666; text-align: center;" v-if="elements.length === 0">
-            <p>Выберите инструмент слева и кликните по холсту</p>
-            <p>Текущий инструмент: <strong>{{ currentTool }}</strong></p>
+            <p>Select a tool on the left and click on the canvas</p>
+            <p>Current tool: <strong>{{ currentTool }}</strong></p>
           </div>
 
           <!-- Selection box -->
@@ -657,7 +656,8 @@ export default {
       clearTimeout(this.historyPushTimer);
       this.historyPushTimer = null;
     }
-  },  computed: {
+  },
+  computed: {
     canUndo() {
       if (this.localHistoryIndex > 0) return true;
       if (this.currentDiagramId) return this.currentVersion > 1;
@@ -1120,9 +1120,14 @@ export default {
     },
 
     handleWheel(event) {
-      const step = 0.1;
-      const delta = event.deltaY > 0 ? -step : step; // wheel down -> СѓРјРµРЅСЊС€РёС‚СЊ РјР°СЃС€С‚Р°Р±
-      this.adjustZoom(delta);
+      if (event.ctrlKey || event.metaKey) {
+        const step = 0.1;
+        const delta = event.deltaY > 0 ? -step : step;
+        this.adjustZoom(delta);
+        return;
+      }
+      this.pan.x -= Number(event.deltaX || 0);
+      this.pan.y -= Number(event.deltaY || 0);
     },
 
     getElementPreset(type) {
@@ -2441,6 +2446,12 @@ export default {
       this.selectConnection(conn);
     },
 
+    resolveLiveConnection(connOrId) {
+      const id = typeof connOrId === 'string' ? connOrId : connOrId?.id;
+      if (!id) return null;
+      return this.connections.find((item) => item.id === id) || null;
+    },
+
     addSelectedConnectionBendPoint() {
       const liveConn = this.resolveLiveConnection(this.selectedConnection);
       if (!liveConn) return;
@@ -2468,24 +2479,18 @@ export default {
 
     getCanvasCoords(event) {
       const canvasEl = this.$el.querySelector('.canvas');
-      const canvasRect = (canvasEl || event.currentTarget).getBoundingClientRect();
-      const scrollLeft = canvasEl ? canvasEl.scrollLeft : 0;
-      const scrollTop = canvasEl ? canvasEl.scrollTop : 0;
-      return {
-        x: (event.clientX - canvasRect.left + scrollLeft - this.pan.x) / this.zoom,
-        y: (event.clientY - canvasRect.top + scrollTop - this.pan.y) / this.zoom
+      const canvasRect = (canvasEl || event.currentTarget).getBoundingClientRect();      return {
+        x: (event.clientX - canvasRect.left - this.pan.x) / this.zoom,
+        y: (event.clientY - canvasRect.top - this.pan.y) / this.zoom
       };
     },
 
     getCanvasPointFromClient(clientX, clientY) {
       const canvasEl = this.$el.querySelector('.canvas');
       if (!canvasEl) return {x: 0, y: 0};
-      const rect = canvasEl.getBoundingClientRect();
-      const scrollLeft = canvasEl.scrollLeft || 0;
-      const scrollTop = canvasEl.scrollTop || 0;
-      return {
-        x: (clientX - rect.left + scrollLeft - this.pan.x) / this.zoom,
-        y: (clientY - rect.top + scrollTop - this.pan.y) / this.zoom
+      const rect = canvasEl.getBoundingClientRect();      return {
+        x: (clientX - rect.left - this.pan.x) / this.zoom,
+        y: (clientY - rect.top - this.pan.y) / this.zoom
       };
     },
 
@@ -2505,10 +2510,10 @@ export default {
       const edge = 28;
       const step = 22;
       const rect = canvasEl.getBoundingClientRect();
-      if (event.clientX >= rect.right - edge) canvasEl.scrollLeft += step;
-      if (event.clientX <= rect.left + edge) canvasEl.scrollLeft -= step;
-      if (event.clientY >= rect.bottom - edge) canvasEl.scrollTop += step;
-      if (event.clientY <= rect.top + edge) canvasEl.scrollTop -= step;
+      if (event.clientX >= rect.right - edge) this.pan.x -= step;
+      if (event.clientX <= rect.left + edge) this.pan.x += step;
+      if (event.clientY >= rect.bottom - edge) this.pan.y -= step;
+      if (event.clientY <= rect.top + edge) this.pan.y += step;
     },
 
     handleBendPointMouseDown(conn, pointIndex, event) {
@@ -3067,6 +3072,7 @@ export default {
   height: 100%;
   z-index: 8;
   pointer-events: none;
+  overflow: visible;
 }
 
 .connection-hit-area {
@@ -3422,7 +3428,7 @@ export default {
   cursor: crosshair;
   min-height: 720px;
   user-select: none;
-  overflow: auto;
+  overflow: hidden;
   z-index: 1;
 }
 
@@ -3782,22 +3788,3 @@ button.has-changes {
   z-index: 10;
 }
 </style>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    resolveLiveConnection(connOrId) {
-      const id = typeof connOrId === 'string' ? connOrId : connOrId?.id;
-      if (!id) return null;
-      return this.connections.find((item) => item.id === id) || null;
-    },

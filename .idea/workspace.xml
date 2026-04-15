@@ -19,36 +19,33 @@
       <change beforePath="$PROJECT_DIR$/frontend/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/package-lock.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/package.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/App.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramCanvas.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramHeader.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramHeader.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramHistoryPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramHistoryPanel.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramPropertiesPanel.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramPropertiesPanel.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramToolbar.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramToolbar.vue" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramsList.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/PropertiesPanel.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/components/Toolbar.vue" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/composables/useDiagramEditor.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/frontend/src/main.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/main.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramRulesTypesDialog.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramRulesTypesDialog.vue" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/utils/bendPoints.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/utils/bendPoints.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/vite.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/vite.config.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/project_structure.txt" beforeDir="false" afterPath="$PROJECT_DIR$/project_structure.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/assets/index-C7sUiycG.js" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/assets/index-Cu9Qr1-u.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/assets/index-BWkgig71.css" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/assets/index-CG_9S8nq.js" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/public/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/public/index.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/quick.sh" beforeDir="false" afterPath="$PROJECT_DIR$/quick.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/scripts/check-undo-redo.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/check-undo-redo.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/scripts/update-schema.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/update-schema.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sql/init.sql" beforeDir="false" afterPath="$PROJECT_DIR$/sql/init.sql" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/sql/updates/2024-10-01-add-connection-properties.sql" beforeDir="false" afterPath="$PROJECT_DIR$/sql/updates/2024-10-01-add-connection-properties.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sql/updates/2026-04-14-stage2-schema.sql" beforeDir="false" afterPath="$PROJECT_DIR$/sql/updates/2026-04-14-stage2-schema.sql" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/app.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/app.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/auth/accessPolicy.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/auth/accessPolicy.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/catalog/builtins.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/catalog/builtins.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/config.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/config.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/controllers/diagramBlockController.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/controllers/diagramBlockController.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/controllers/diagramConnectionController.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/controllers/diagramConnectionController.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/controllers/diagramController.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/controllers/diagramController.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/controllers/diagramHistoryController.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/controllers/diagramHistoryController.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/controllers/diagramTypeController.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/controllers/diagramTypeController.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/db.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/db.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/errors/connectionRuleViolationError.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/errors/connectionRuleViolationError.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/index.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/index.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/middleware/asyncHandler.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/middleware/asyncHandler.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/middleware/errorHandler.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/middleware/errorHandler.ts" afterDir="false" />
@@ -59,11 +56,13 @@
       <change beforePath="$PROJECT_DIR$/src/routes/diagramBlocks.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/diagramBlocks.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/routes/diagramConnections.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/diagramConnections.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/routes/diagramHistory.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/diagramHistory.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/diagramTypes.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/diagramTypes.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/routes/diagrams.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/diagrams.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/services/diagramBlockService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramBlockService.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/services/diagramConnectionService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramConnectionService.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/services/diagramHistoryService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramHistoryService.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/services/diagramService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramService.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/services/diagramTypeService.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/services/diagramTypeService.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/types.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/types.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/utils/validators.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/utils/validators.ts" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/test/bend-points.test.ts" beforeDir="false" afterPath="$PROJECT_DIR$/test/bend-points.test.ts" afterDir="false" />
@@ -213,7 +212,7 @@
       <workItem from="1765950752008" duration="3980000" />
       <workItem from="1766517923703" duration="4291000" />
       <workItem from="1776183643022" duration="3412000" />
-      <workItem from="1776223484031" duration="6219000" />
+      <workItem from="1776223484031" duration="7842000" />
     </task>
     <servers />
   </component>

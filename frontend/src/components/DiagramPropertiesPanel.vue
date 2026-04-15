@@ -88,7 +88,7 @@
       </div>
 
       <div class="actions">
-        <Button icon="pi pi-plus" label="Точка изгиба" size="small" outlined @click="selectedConnection && addBendPointAtMidpoint(selectedConnection)" />
+        <Button icon="pi pi-plus" label="Точка изгиба" size="small" outlined @click="addSelectedBendPoint()" />
         <Button
           icon="pi pi-minus-circle"
           label="Удалить точку"
@@ -131,6 +131,7 @@ export default {
     selectedBendPoint: { type: Object, default: null },
     getElementPreset: { type: Function, required: true },
     deselectAll: { type: Function, required: true },
+    addSelectedBendPoint: { type: Function, required: true },
     deleteConnection: { type: Function, required: true },
     addBendPointAtMidpoint: { type: Function, required: true },
     hasBendPoints: { type: Function, required: true },

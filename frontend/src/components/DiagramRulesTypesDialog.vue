@@ -116,10 +116,54 @@
               <InputText v-model="elementForm.color" placeholder="#3498db" />
               <label>Border Color</label>
               <InputText v-model="elementForm.border" placeholder="#2d83be" />
-              <label>Ports (JSON)</label>
-              <Textarea v-model="elementForm.portsJson" rows="2" autoResize />
-              <label>Fields (JSON)</label>
-              <Textarea v-model="elementForm.fieldSchemaJson" rows="3" autoResize />
+              <label>Ports (GUI)</label>
+              <div class="builder-box">
+                <div v-for="(port, idx) in elementPorts" :key="`port-${idx}`" class="builder-row ports-row">
+                  <span class="builder-index">#{{ idx + 1 }}</span>
+                  <InputNumber v-model="port.x" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" placeholder="x [0..1]" />
+                  <InputNumber v-model="port.y" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" placeholder="y [0..1]" />
+                  <InputText v-model="port.label" placeholder="Port label" />
+                  <Button icon="pi pi-trash" severity="danger" text @click="removePort(idx)" />
+                </div>
+                <Button icon="pi pi-plus" label="Add Port" text @click="addPort" />
+              </div>
+
+              <label>Fields (GUI)</label>
+              <div class="builder-box">
+                <div v-for="(field, idx) in elementFields" :key="`field-${idx}`" class="builder-row field-row">
+                  <span class="builder-index">#{{ idx + 1 }}</span>
+                  <InputText v-model="field.label" placeholder="Label" />
+                  <InputText v-model="field.key" placeholder="key_name" />
+                  <Dropdown v-model="field.type" :options="fieldTypeOptions" optionLabel="label" optionValue="value" />
+                  <InputText v-model="field.default" placeholder="Default value" />
+                  <div class="switch-wrap">
+                    <small>Required</small>
+                    <InputSwitch v-model="field.required" />
+                  </div>
+                  <div class="switch-wrap">
+                    <small>Visible</small>
+                    <InputSwitch v-model="field.visibleOnBlock" />
+                  </div>
+                  <InputText
+                    v-if="field.type === 'select'"
+                    v-model="field.optionsCsv"
+                    placeholder="Options: one, two, three"
+                  />
+                  <Button icon="pi pi-trash" severity="danger" text @click="removeField(idx)" />
+                </div>
+                <Button icon="pi pi-plus" label="Add Field" text @click="addField" />
+              </div>
+            </div>
+            <div class="preview-block">
+              <label>Element Preview</label>
+              <div class="preview-canvas">
+                <div class="preview-element" :style="previewElementStyle">
+                  <div class="preview-title">{{ elementForm.name || 'New Element' }}</div>
+                  <div v-for="(f, idx) in previewVisibleFields" :key="`preview-field-${idx}`" class="preview-field">
+                    {{ f.label || f.key || `Field ${idx + 1}` }}
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="actions">
               <Button label="Create" icon="pi pi-plus" :disabled="!canMutate" @click="createElement" />
@@ -275,14 +319,15 @@ const elementForm = reactive({
   height: 60,
   color: '#3498db',
   border: '#2d83be',
-  portsJson: '[]',
-  fieldSchemaJson: '[]',
 });
+const elementPorts = ref([]);
+const elementFields = ref([]);
 const connectionForm = reactive({ name: '', key: '', color: '#34495e', dash: '', arrow_start: 'none', arrow_end: 'arrow', directed: true });
 const bulkForm = reactive({ mode: 'row', target_id: null, connection_type_ids: [], allowed: true });
 const cellEditor = reactive({ visible: false, fromId: null, toId: null, fromName: '', toName: '', rules: [] });
 
 const shapeOptions = [{ label: 'Rect', value: 'rect' }, { label: 'RoundRect', value: 'roundrect' }, { label: 'Ellipse', value: 'ellipse' }, { label: 'Diamond', value: 'diamond' }, { label: 'Circle', value: 'circle' }, { label: 'Cylinder', value: 'cylinder' }, { label: 'Actor', value: 'actor' }, { label: 'Custom', value: 'custom' }];
+const fieldTypeOptions = [{ label: 'Text', value: 'text' }, { label: 'Number', value: 'number' }, { label: 'Select', value: 'select' }, { label: 'Checkbox', value: 'checkbox' }];
 const arrowOptions = [{ label: 'None', value: 'none' }, { label: 'Arrow', value: 'arrow' }, { label: 'Empty Arrow', value: 'empty_arrow' }, { label: 'Filled Diamond', value: 'filled_diamond' }, { label: 'Empty Diamond', value: 'empty_diamond' }];
 const allowOptions = [{ label: 'Allowed', value: true }, { label: 'Blocked', value: false }];
 const bulkModes = [{ label: 'By Row', value: 'row' }, { label: 'By Column', value: 'column' }, { label: 'By Connection Type', value: 'connection_type' }];
@@ -291,6 +336,25 @@ const matrixElements = computed(() => matrix.value.elements || []);
 const matrixRows = computed(() => buildMatrixRows(matrix.value));
 const canMutate = computed(() => Boolean(selectedType.value && !selectedType.value.is_builtin));
 const bulkTargets = computed(() => bulkForm.mode === 'connection_type' ? connectionTypes.value.map((x) => ({ label: x.name, value: x.id })) : matrixElements.value.map((x) => ({ label: x.name, value: x.id })));
+const previewVisibleFields = computed(() => elementFields.value.filter((f) => f.visibleOnBlock !== false).slice(0, 5));
+const previewElementStyle = computed(() => {
+  const w = Math.max(60, Number(elementForm.width) || 120);
+  const h = Math.max(40, Number(elementForm.height) || 60);
+  const bg = elementForm.color || '#3498db';
+  const border = elementForm.border || '#2d83be';
+  const shape = elementForm.shape || 'rect';
+  const style = {
+    width: `${w}px`,
+    minHeight: `${h}px`,
+    background: bg,
+    border: `2px solid ${border}`,
+    color: '#ffffff',
+  };
+  if (shape === 'ellipse' || shape === 'circle') style.borderRadius = '50%';
+  else if (shape === 'roundrect' || shape === 'cylinder') style.borderRadius = '16px';
+  else if (shape === 'diamond') style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
+  return style;
+});
 
 const asArray = (x) => (Array.isArray(x) ? x : []);
 const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -322,7 +386,35 @@ const ruleLineStyle = (id) => {
 };
 const fail = (msg) => { errorMessage.value = msg; successMessage.value = ''; };
 const ok = (msg) => { successMessage.value = msg; errorMessage.value = ''; };
-const parseArrayJson = (raw, label) => { try { const parsed = JSON.parse(raw); if (!Array.isArray(parsed)) throw new Error('not array'); return parsed; } catch { throw new Error(`${label} must be a JSON array`); } };
+const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
+const toOptionsCsv = (options) => asArray(options).join(', ');
+const fromOptionsCsv = (csv) => String(csv || '').split(',').map((x) => x.trim()).filter(Boolean);
+const makePort = () => ({ x: 0.5, y: 0.5, label: '' });
+const makeField = (idx = 1) => ({
+  type: 'text',
+  label: `Field ${idx}`,
+  key: `field_${idx}`,
+  required: false,
+  default: '',
+  visibleOnBlock: true,
+  optionsCsv: '',
+});
+const normalizePortsForApi = () =>
+  elementPorts.value.map((port) => ({ x: clamp01(port.x), y: clamp01(port.y), ...(String(port.label || '').trim() ? { label: String(port.label).trim() } : {}) }));
+const normalizeFieldsForApi = () =>
+  elementFields.value.map((field) => ({
+    type: field.type || 'text',
+    label: String(field.label || '').trim(),
+    key: String(field.key || '').trim(),
+    required: Boolean(field.required),
+    default: field.default ?? '',
+    visibleOnBlock: field.visibleOnBlock !== false,
+    options: field.type === 'select' ? fromOptionsCsv(field.optionsCsv) : [],
+  }));
+const addPort = () => elementPorts.value.push(makePort());
+const removePort = (idx) => elementPorts.value.splice(idx, 1);
+const addField = () => elementFields.value.push(makeField(elementFields.value.length + 1));
+const removeField = (idx) => elementFields.value.splice(idx, 1);
 
 const resetElementForm = () => {
   selectedElementType.value = null;
@@ -335,9 +427,9 @@ const resetElementForm = () => {
     height: 60,
     color: '#3498db',
     border: '#2d83be',
-    portsJson: '[]',
-    fieldSchemaJson: '[]',
   });
+  elementPorts.value = [];
+  elementFields.value = [];
 };
 
 const resetConnectionForm = () => {
@@ -361,9 +453,21 @@ const fillElementForm = ({ data }) => {
     height: Number(data.default_size?.height) || 60,
     color: data.default_style?.color || '#3498db',
     border: data.default_style?.border || '#2d83be',
-    portsJson: JSON.stringify(asArray(data.ports), null, 2),
-    fieldSchemaJson: JSON.stringify(asArray(data.field_schema), null, 2),
   });
+  elementPorts.value = asArray(data.ports).map((port) => ({
+    x: clamp01(port?.x),
+    y: clamp01(port?.y),
+    label: String(port?.label || ''),
+  }));
+  elementFields.value = asArray(data.field_schema).map((field, idx) => ({
+    type: field?.type || 'text',
+    label: String(field?.label || ''),
+    key: String(field?.key || `field_${idx + 1}`),
+    required: Boolean(field?.required),
+    default: field?.default ?? '',
+    visibleOnBlock: field?.visibleOnBlock !== false,
+    optionsCsv: toOptionsCsv(field?.options),
+  }));
 };
 
 const fillConnectionForm = ({ data }) => {
@@ -442,6 +546,7 @@ const deleteType = async () => {
 
 const createElement = async () => {
   if (!selectedDiagramTypeId.value || !canMutate.value) return;
+  if (!elementForm.name?.trim() || !elementForm.key?.trim()) return fail('Element name and key are required');
   try {
     await diagramTypesService.createElement(selectedDiagramTypeId.value, {
       key: elementForm.key,
@@ -450,8 +555,8 @@ const createElement = async () => {
       svg_path: elementForm.svg_path || null,
       default_style: { color: elementForm.color, border: elementForm.border },
       default_size: { width: elementForm.width, height: elementForm.height },
-      ports: parseArrayJson(elementForm.portsJson, 'Ports'),
-      field_schema: parseArrayJson(elementForm.fieldSchemaJson, 'Fields'),
+      ports: normalizePortsForApi(),
+      field_schema: normalizeFieldsForApi(),
     });
     await loadContext();
     resetElementForm();
@@ -461,6 +566,7 @@ const createElement = async () => {
 
 const updateElement = async () => {
   if (!selectedDiagramTypeId.value || !selectedElementType.value || !canMutate.value) return;
+  if (!elementForm.name?.trim() || !elementForm.key?.trim()) return fail('Element name and key are required');
   try {
     await diagramTypesService.updateElement(selectedDiagramTypeId.value, selectedElementType.value.id, {
       key: elementForm.key,
@@ -469,8 +575,8 @@ const updateElement = async () => {
       svg_path: elementForm.svg_path || null,
       default_style: { color: elementForm.color, border: elementForm.border },
       default_size: { width: elementForm.width, height: elementForm.height },
-      ports: parseArrayJson(elementForm.portsJson, 'Ports'),
-      field_schema: parseArrayJson(elementForm.fieldSchemaJson, 'Fields'),
+      ports: normalizePortsForApi(),
+      field_schema: normalizeFieldsForApi(),
     });
     await loadContext();
     ok('Element updated');
@@ -562,18 +668,80 @@ watch(() => props.currentDiagramTypeId, (id) => {
 <style scoped>
 .top-bar { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
 .grid2 { display: grid; grid-template-columns: repeat(2, minmax(560px, 1fr)); gap: 1rem; align-items: start; }
-.card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 1rem; background: #fff; min-height: 58vh; overflow: auto; }
+.card { border: 1px solid var(--app-border, #e2e8f0); border-radius: 10px; padding: 1rem; background: var(--app-panel, #fff); min-height: 58vh; overflow: auto; color: var(--app-text, #1f2937); }
 .form { display: grid; grid-template-columns: 1fr; gap: 0.35rem; margin-bottom: 0.8rem; }
 .actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.muted { color: #64748b; }
-.matrix-cell { border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.4rem; background: #f8fafc; min-width: 170px; display: flex; flex-direction: column; gap: 0.3rem; }
+.muted { color: var(--app-muted, #64748b); }
+.matrix-cell { border: 1px solid var(--app-border, #e2e8f0); border-radius: 8px; padding: 0.4rem; background: var(--app-panel-soft, #f8fafc); min-width: 170px; display: flex; flex-direction: column; gap: 0.3rem; }
 .matrix-cell.editable { cursor: pointer; border-color: #7dd3fc; }
 .rule-row { display: flex; justify-content: space-between; align-items: center; gap: 0.35rem; }
 .rule-name { display: inline-flex; align-items: center; gap: 0.35rem; }
 .rule-line { flex: 0 0 auto; }
-.rule-editor-row { border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.5rem; margin-top: 0.5rem; display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; }
+.rule-editor-row { border: 1px solid var(--app-border, #e2e8f0); border-radius: 8px; padding: 0.5rem; margin-top: 0.5rem; display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; background: var(--app-panel-soft, #f8fafc); }
+
+.builder-box { border: 1px solid var(--app-border, #d1d5db); border-radius: 8px; padding: 0.5rem; background: var(--app-panel-soft, #f8fafc); display: flex; flex-direction: column; gap: 0.4rem; }
+.builder-row { display: grid; gap: 0.4rem; align-items: center; background: var(--app-panel, #fff); border: 1px solid var(--app-border, #e5e7eb); border-radius: 8px; padding: 0.4rem; }
+.ports-row { grid-template-columns: auto 120px 120px 1fr auto; }
+.field-row { grid-template-columns: auto 1fr 1fr 130px 1fr auto auto minmax(220px, 1fr) auto; }
+.builder-index { font-size: 0.8rem; color: var(--app-muted, #6b7280); min-width: 26px; text-align: center; }
+.switch-wrap { display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-start; }
+
+.preview-block { margin-bottom: 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; }
+.preview-canvas {
+  border: 1px dashed var(--app-border, #cbd5e1);
+  border-radius: 10px;
+  min-height: 180px;
+  padding: 0.8rem;
+  background: var(--app-panel-soft, #f8fafc);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.preview-element {
+  padding: 0.55rem;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+.preview-title { font-weight: 700; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.35); padding-bottom: 0.25rem; }
+.preview-field { font-size: 0.8rem; opacity: 0.95; border-top: 1px solid rgba(255, 255, 255, 0.22); padding-top: 0.25rem; }
+
+.rules-dialog :deep(.p-dialog),
+.rules-dialog :deep(.p-dialog-header),
+.rules-dialog :deep(.p-dialog-content),
+.rules-dialog :deep(.p-dialog-footer) {
+  background: var(--app-panel, #ffffff) !important;
+  color: var(--app-text, #1f2937) !important;
+}
+
+.rules-dialog :deep(.p-tabview-nav),
+.rules-dialog :deep(.p-tabview-panels),
+.rules-dialog :deep(.p-tabview-panel) {
+  background: var(--app-panel, #ffffff) !important;
+  color: var(--app-text, #1f2937) !important;
+}
+
+.rules-dialog :deep(.p-component),
+.rules-dialog :deep(.p-tabview),
+.rules-dialog :deep(.p-tabview-panels),
+.rules-dialog :deep(.p-tabview-panel),
+.rules-dialog :deep(.p-dialog-content > div) {
+  color: var(--app-text, #1f2937) !important;
+}
+
+.rules-dialog :deep(.p-datatable),
+.rules-dialog :deep(.p-datatable-table),
+.rules-dialog :deep(.p-datatable-thead > tr > th),
+.rules-dialog :deep(.p-datatable-tbody > tr > td) {
+  background: var(--app-panel, #ffffff);
+  color: var(--app-text, #1f2937);
+  border-color: var(--app-border, #e2e8f0);
+}
 
 .rules-dialog :deep(.p-dialog-content) {
+  background: var(--app-panel, #ffffff) !important;
   max-height: 86vh;
   overflow: auto;
 }
@@ -585,10 +753,26 @@ watch(() => props.currentDiagramTypeId, (id) => {
 .rules-dialog :deep(.p-selectbutton),
 .rules-dialog :deep(.p-textarea) {
   width: 100%;
+  background: var(--app-panel, #fff);
+  color: var(--app-text, #1f2937);
+  border-color: var(--app-border, #d1d5db);
+}
+
+.rules-dialog :deep(.p-dropdown-panel),
+.rules-dialog :deep(.p-multiselect-panel) {
+  background: var(--app-panel, #fff);
+  color: var(--app-text, #1f2937);
+}
+
+.rules-dialog :deep(.p-dropdown-item),
+.rules-dialog :deep(.p-multiselect-item) {
+  color: var(--app-text, #1f2937);
 }
 
 @media (max-width: 1400px) {
   .grid2 { grid-template-columns: 1fr; }
   .card { min-height: 42vh; }
+  .ports-row { grid-template-columns: auto 1fr 1fr 1fr auto; }
+  .field-row { grid-template-columns: auto 1fr 1fr 1fr 1fr auto auto 1fr auto; }
 }
 </style>

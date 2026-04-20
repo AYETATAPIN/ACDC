@@ -447,6 +447,22 @@
   letter-spacing: 0.04em;
 }
 
+.element-field-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: inherit;
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
 .shape-ellipse .element-type-tag {
   margin-top: 2px;
 }

@@ -19,14 +19,21 @@
       <change beforePath="$PROJECT_DIR$/frontend/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/package-lock.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/package.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/App.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/App.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/app-constants.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/app-constants.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/app-options.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/app-options.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/components/DiagramRulesTypesDialog.vue" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/components/DiagramRulesTypesDialog.vue" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/methods/canvas-methods.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/methods/canvas-methods.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/methods/connection-methods.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/methods/connection-methods.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/methods/diagram-methods.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/methods/diagram-methods.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/methods/shared-methods.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/methods/shared-methods.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/frontend/src/styles/app.css" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/styles/app.css" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/src/utils/bendPoints.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/src/utils/bendPoints.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/frontend/vite.config.js" beforeDir="false" afterPath="$PROJECT_DIR$/frontend/vite.config.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/project_structure.txt" beforeDir="false" afterPath="$PROJECT_DIR$/project_structure.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/assets/index-B3nW67LC.css" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/public/assets/index-KaoZQtGi.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/assets/index-CrM9QbDr.js" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/assets/index-DxW-sSVX.css" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/public/index.html" beforeDir="false" afterPath="$PROJECT_DIR$/public/index.html" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/quick.sh" beforeDir="false" afterPath="$PROJECT_DIR$/quick.sh" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/scripts/check-undo-redo.sh" beforeDir="false" afterPath="$PROJECT_DIR$/scripts/check-undo-redo.sh" afterDir="false" />
@@ -144,32 +151,32 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "DefaultHtmlFileTemplate": "HTML File",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "Node.js.app.ts.executor": "Run",
-    "Node.js.index.ts.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "featue/fe__fixes",
-    "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "D:/prg/frontik/ACDC/app",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "ts.external.directory.path": "D:\\prg\\frontik\\ACDC\\node_modules\\typescript\\lib",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;DefaultHtmlFileTemplate&quot;: &quot;HTML File&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;Node.js.app.ts.executor&quot;: &quot;Run&quot;,
+    &quot;Node.js.index.ts.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;featue/fe__fixes&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;D:/prg/frontik/ACDC/app&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;ts.external.directory.path&quot;: &quot;D:\\prg\\frontik\\ACDC\\node_modules\\typescript\\lib&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   },
-  "keyToStringList": {
-    "vue.recent.templates": [
-      "Vue Composition API Component"
+  &quot;keyToStringList&quot;: {
+    &quot;vue.recent.templates&quot;: [
+      &quot;Vue Composition API Component&quot;
     ]
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="D:\prg\frontik\ACDC\app" />
@@ -211,7 +218,8 @@
       <workItem from="1765950752008" duration="3980000" />
       <workItem from="1766517923703" duration="4291000" />
       <workItem from="1776183643022" duration="3412000" />
-      <workItem from="1776223484031" duration="13117000" />
+      <workItem from="1776223484031" duration="14894000" />
+      <workItem from="1776681962600" duration="2582000" />
     </task>
     <servers />
   </component>

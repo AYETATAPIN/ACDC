@@ -98,77 +98,29 @@
           </section>
 
           <section class="card">
-            <h4>{{ selectedElementType ? 'Edit Element' : 'New Element' }}</h4>
-            <div class="form">
-              <label>Name</label>
-              <InputText v-model="elementForm.name" />
-              <label>Key</label>
-              <InputText v-model="elementForm.key" />
-              <label>Shape</label>
-              <Dropdown v-model="elementForm.shape" :options="shapeOptions" optionLabel="label" optionValue="value" />
-              <label>SVG Path</label>
-              <Textarea v-model="elementForm.svg_path" rows="2" autoResize />
-              <label>Width</label>
-              <InputNumber v-model="elementForm.width" :min="20" />
-              <label>Height</label>
-              <InputNumber v-model="elementForm.height" :min="20" />
-              <label>Fill Color</label>
-              <InputText v-model="elementForm.color" placeholder="#3498db" />
-              <label>Border Color</label>
-              <InputText v-model="elementForm.border" placeholder="#2d83be" />
-              <label>Ports (GUI)</label>
-              <div class="builder-box">
-                <div v-for="(port, idx) in elementPorts" :key="`port-${idx}`" class="builder-row ports-row">
-                  <span class="builder-index">#{{ idx + 1 }}</span>
-                  <InputNumber v-model="port.x" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" placeholder="x [0..1]" />
-                  <InputNumber v-model="port.y" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" placeholder="y [0..1]" />
-                  <InputText v-model="port.label" placeholder="Port label" />
-                  <Button icon="pi pi-trash" severity="danger" text @click="removePort(idx)" />
-                </div>
-                <Button icon="pi pi-plus" label="Add Port" text @click="addPort" />
-              </div>
-
-              <label>Fields (GUI)</label>
-              <div class="builder-box">
-                <div v-for="(field, idx) in elementFields" :key="`field-${idx}`" class="builder-row field-row">
-                  <span class="builder-index">#{{ idx + 1 }}</span>
-                  <InputText v-model="field.label" placeholder="Label" />
-                  <InputText v-model="field.key" placeholder="key_name" />
-                  <Dropdown v-model="field.type" :options="fieldTypeOptions" optionLabel="label" optionValue="value" />
-                  <InputText v-model="field.default" placeholder="Default value" />
-                  <div class="switch-wrap">
-                    <small>Required</small>
-                    <InputSwitch v-model="field.required" />
-                  </div>
-                  <div class="switch-wrap">
-                    <small>Visible</small>
-                    <InputSwitch v-model="field.visibleOnBlock" />
-                  </div>
-                  <InputText
-                    v-if="field.type === 'select'"
-                    v-model="field.optionsCsv"
-                    placeholder="Options: one, two, three"
-                  />
-                  <Button icon="pi pi-trash" severity="danger" text @click="removeField(idx)" />
-                </div>
-                <Button icon="pi pi-plus" label="Add Field" text @click="addField" />
-              </div>
+            <h4>Element Actions</h4>
+            <div class="actions">
+              <Button label="Create Element" icon="pi pi-plus" :disabled="!canMutate" @click="openCreateElementDialog" />
+              <Button label="Edit Selected" icon="pi pi-pencil" severity="secondary" :disabled="!selectedElementType || !canMutate" @click="openEditElementDialog" />
+              <Button label="Delete Selected" icon="pi pi-trash" severity="danger" outlined :disabled="!selectedElementType || selectedElementType?.is_builtin || !canMutate" @click="deleteElement" />
             </div>
             <div class="preview-block">
-              <label>Element Preview</label>
+              <label>Quick Preview</label>
               <div class="preview-canvas">
                 <div class="preview-element" :style="previewElementStyle">
                   <div class="preview-title">{{ elementForm.name || 'New Element' }}</div>
-                  <div v-for="(f, idx) in previewVisibleFields" :key="`preview-field-${idx}`" class="preview-field">
-                    {{ f.label || f.key || `Field ${idx + 1}` }}
+                  <div
+                    v-for="item in previewVisibleFields"
+                    :key="`quick-preview-field-${item.index}`"
+                    class="preview-field preview-field-placed"
+                    :style="previewFieldStyle(item.field, item.order)"
+                  >
+                    {{ item.field.label || item.field.key || `Field ${item.order + 1}` }}
                   </div>
                 </div>
               </div>
             </div>
             <div class="actions">
-              <Button label="Create" icon="pi pi-plus" :disabled="!canMutate" @click="createElement" />
-              <Button label="Save" icon="pi pi-save" severity="secondary" :disabled="!selectedElementType || !canMutate" @click="updateElement" />
-              <Button label="Delete" icon="pi pi-trash" severity="danger" outlined :disabled="!selectedElementType || selectedElementType?.is_builtin || !canMutate" @click="deleteElement" />
               <Button label="Reset" text icon="pi pi-times" @click="resetElementForm" />
             </div>
           </section>
@@ -251,6 +203,183 @@
       </TabPanel>
     </TabView>
 
+    <Dialog
+      v-model:visible="elementEditor.visible"
+      modal
+      :draggable="false"
+      :header="elementEditor.mode === 'edit' ? 'Edit Element' : 'Create Element'"
+      :style="{ width: '98vw', maxWidth: '1880px' }"
+      :contentStyle="{ maxHeight: '88vh' }"
+      class="rules-dialog element-editor-dialog"
+    >
+      <div class="editor-grid">
+        <section class="card editor-card">
+          <h4>Basic Settings</h4>
+          <div class="form">
+            <label>Name</label>
+            <InputText v-model="elementForm.name" />
+            <label>Key</label>
+            <InputText v-model="elementForm.key" />
+            <label>Shape</label>
+            <Dropdown v-model="elementForm.shape" :options="shapeOptions" optionLabel="label" optionValue="value" />
+            <label>SVG Path</label>
+            <Textarea v-model="elementForm.svg_path" rows="2" autoResize />
+            <div class="compact-grid two">
+              <div class="compact-field">
+                <label>Width</label>
+                <InputNumber v-model="elementForm.width" :min="20" showButtons />
+              </div>
+              <div class="compact-field">
+                <label>Height</label>
+                <InputNumber v-model="elementForm.height" :min="20" showButtons />
+              </div>
+            </div>
+            <div class="compact-grid two">
+              <div class="compact-field">
+                <label>Fill Color</label>
+                <div class="color-row">
+                  <ColorPicker :modelValue="toPickerColor(elementForm.color)" @update:modelValue="elementForm.color = toHexColor($event)" />
+                  <InputText v-model="elementForm.color" placeholder="#3498db" />
+                </div>
+              </div>
+              <div class="compact-field">
+                <label>Border Color</label>
+                <div class="color-row">
+                  <ColorPicker :modelValue="toPickerColor(elementForm.border)" @update:modelValue="elementForm.border = toHexColor($event)" />
+                  <InputText v-model="elementForm.border" placeholder="#2d83be" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+            <div class="preview-block preview-block-editor">
+              <label>Element Preview</label>
+            <div ref="previewCanvasRef" class="preview-canvas">
+              <div class="preview-element" :style="previewElementStyle">
+                <div class="preview-title">{{ elementForm.name || 'New Element' }}</div>
+                <div
+                  v-for="item in previewVisibleFields"
+                  :key="`dialog-preview-field-${item.index}`"
+                  class="preview-field preview-field-placed draggable"
+                  :class="{ dragging: previewDrag.active && previewDrag.fieldIndex === item.index }"
+                  :style="previewFieldStyle(item.field, item.order)"
+                  @pointerdown.stop.prevent="beginPreviewFieldDrag(item.index, $event)"
+                >
+                  {{ item.field.label || item.field.key || `Field ${item.order + 1}` }}
+                </div>
+              </div>
+            </div>
+            <small class="muted">Drag labels in preview to set X/Y positions</small>
+          </div>
+        </section>
+
+        <section class="card editor-card">
+          <div class="builder-section">
+            <div class="builder-header">
+              <h4>Ports</h4>
+              <Button icon="pi pi-plus" label="Add Port" text @click="addPort" />
+            </div>
+            <div v-if="!elementPorts.length" class="builder-empty">No ports yet</div>
+            <div v-for="(port, idx) in elementPorts" :key="`port-editor-${idx}`" class="builder-item">
+              <div class="builder-item-head">
+                <span class="builder-index">#{{ idx + 1 }}</span>
+                <Button icon="pi pi-trash" severity="danger" text @click="removePort(idx)" />
+              </div>
+              <div class="compact-grid three">
+                <div class="compact-field">
+                  <label>X (0..1)</label>
+                  <InputNumber v-model="port.x" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" showButtons />
+                </div>
+                <div class="compact-field">
+                  <label>Y (0..1)</label>
+                  <InputNumber v-model="port.y" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" showButtons />
+                </div>
+                <div class="compact-field">
+                  <label>Label</label>
+                  <InputText v-model="port.label" placeholder="Port label" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="builder-section">
+            <div class="builder-header">
+              <h4>Fields</h4>
+              <Button icon="pi pi-plus" label="Add Field" text @click="addField" />
+            </div>
+
+            <div class="fields-layout">
+              <div class="fields-list">
+                <button
+                  v-for="(field, idx) in elementFields"
+                  :key="`field-chip-${idx}`"
+                  type="button"
+                  class="field-chip"
+                  :class="{ active: selectedFieldIndex === idx }"
+                  @click="selectField(idx)"
+                >
+                  <span class="field-chip-title">{{ field.label || `Field ${idx + 1}` }}</span>
+                  <small class="field-chip-sub">{{ field.key || `field_${idx + 1}` }}</small>
+                </button>
+                <div v-if="!elementFields.length" class="builder-empty">No fields yet</div>
+              </div>
+
+              <div class="field-editor-panel" v-if="selectedField">
+                <div class="builder-item-head">
+                  <span class="builder-index">#{{ selectedFieldIndex + 1 }}</span>
+                  <Button icon="pi pi-trash" severity="danger" text @click="removeField(selectedFieldIndex)" />
+                </div>
+                <div class="compact-grid two">
+                  <div class="compact-field">
+                    <label>Label</label>
+                    <InputText v-model="selectedField.label" placeholder="Label" />
+                  </div>
+                  <div class="compact-field">
+                    <label>Key</label>
+                    <InputText v-model="selectedField.key" placeholder="key_name" />
+                  </div>
+                </div>
+                <div class="compact-grid two">
+                  <div class="compact-field">
+                    <label>Type</label>
+                    <Dropdown v-model="selectedField.type" :options="fieldTypeOptions" optionLabel="label" optionValue="value" />
+                  </div>
+                  <div class="compact-field">
+                    <label>Default Value</label>
+                    <InputText v-model="selectedField.default" placeholder="Default value" />
+                  </div>
+                </div>
+                <div class="compact-grid two">
+                  <div class="compact-field">
+                    <label>X Position (0..1)</label>
+                    <InputNumber v-model="selectedField.x" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" showButtons />
+                  </div>
+                  <div class="compact-field">
+                    <label>Y Position (0..1)</label>
+                    <InputNumber v-model="selectedField.y" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" showButtons />
+                  </div>
+                </div>
+                <div class="compact-grid two">
+                  <div class="switch-wrap switch-wrap-wide"><small>Required</small><InputSwitch v-model="selectedField.required" /></div>
+                  <div class="switch-wrap switch-wrap-wide"><small>Visible On Block</small><InputSwitch v-model="selectedField.visibleOnBlock" /></div>
+                </div>
+                <div class="compact-field" v-if="selectedField.type === 'select'">
+                  <label>Options (comma separated)</label>
+                  <InputText v-model="selectedField.optionsCsv" placeholder="one, two, three" />
+                </div>
+              </div>
+
+              <div class="builder-empty field-editor-empty" v-else>Select a field to edit</div>
+            </div>
+          </div>
+        </section>
+      </div>
+      <template #footer>
+        <Button label="Cancel" text icon="pi pi-times" @click="elementEditor.visible = false" />
+        <Button :label="elementEditor.mode === 'edit' ? 'Save' : 'Create'" icon="pi pi-check" :disabled="!canMutate" @click="submitElementEditor" />
+      </template>
+    </Dialog>
+
     <Dialog v-model:visible="cellEditor.visible" modal header="Edit Matrix Cell" :draggable="false" :style="{ width: '520px' }">
       <div class="muted">From {{ cellEditor.fromName }} to {{ cellEditor.toName }}</div>
       <div v-for="rule in cellEditor.rules" :key="rule.connection_type_id" class="rule-editor-row">
@@ -266,7 +395,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import Dialog from 'primevue/dialog';
 import TabView from 'primevue/tabview';
 import TabPanel from 'primevue/tabpanel';
@@ -280,6 +409,7 @@ import Tag from 'primevue/tag';
 import Message from 'primevue/message';
 import Textarea from 'primevue/textarea';
 import InputNumber from 'primevue/inputnumber';
+import ColorPicker from 'primevue/colorpicker';
 import MultiSelect from 'primevue/multiselect';
 import SelectButton from 'primevue/selectbutton';
 import { diagramTypesService, rulesService } from '../services/index.js';
@@ -322,7 +452,19 @@ const elementForm = reactive({
 });
 const elementPorts = ref([]);
 const elementFields = ref([]);
+const selectedFieldIndex = ref(-1);
+const previewCanvasRef = ref(null);
+const previewDrag = reactive({
+  active: false,
+  fieldIndex: -1,
+  startClientX: 0,
+  startClientY: 0,
+  startX: 0,
+  startY: 0,
+  rect: null,
+});
 const connectionForm = reactive({ name: '', key: '', color: '#34495e', dash: '', arrow_start: 'none', arrow_end: 'arrow', directed: true });
+const elementEditor = reactive({ visible: false, mode: 'create' });
 const bulkForm = reactive({ mode: 'row', target_id: null, connection_type_ids: [], allowed: true });
 const cellEditor = reactive({ visible: false, fromId: null, toId: null, fromName: '', toName: '', rules: [] });
 
@@ -334,9 +476,18 @@ const bulkModes = [{ label: 'By Row', value: 'row' }, { label: 'By Column', valu
 
 const matrixElements = computed(() => matrix.value.elements || []);
 const matrixRows = computed(() => buildMatrixRows(matrix.value));
-const canMutate = computed(() => Boolean(selectedType.value && !selectedType.value.is_builtin));
+const canMutate = computed(() => Boolean(selectedType.value));
 const bulkTargets = computed(() => bulkForm.mode === 'connection_type' ? connectionTypes.value.map((x) => ({ label: x.name, value: x.id })) : matrixElements.value.map((x) => ({ label: x.name, value: x.id })));
-const previewVisibleFields = computed(() => elementFields.value.filter((f) => f.visibleOnBlock !== false).slice(0, 5));
+const previewVisibleFields = computed(() =>
+  elementFields.value
+    .map((field, index) => ({ field, index }))
+    .filter((entry) => entry.field.visibleOnBlock !== false)
+    .map((entry, order) => ({ ...entry, order })),
+);
+const selectedField = computed(() => {
+  if (selectedFieldIndex.value < 0) return null;
+  return elementFields.value[selectedFieldIndex.value] || null;
+});
 const previewElementStyle = computed(() => {
   const w = Math.max(60, Number(elementForm.width) || 120);
   const h = Math.max(40, Number(elementForm.height) || 60);
@@ -355,6 +506,15 @@ const previewElementStyle = computed(() => {
   else if (shape === 'diamond') style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
   return style;
 });
+const previewFieldStyle = (field, idx) => {
+  const fallbackY = Math.min(0.9, 0.22 + idx * 0.16);
+  const x = clamp01(field?.x ?? 0.5);
+  const y = clamp01(field?.y ?? fallbackY);
+  return {
+    left: `${(x * 100).toFixed(1)}%`,
+    top: `${(y * 100).toFixed(1)}%`,
+  };
+};
 
 const asArray = (x) => (Array.isArray(x) ? x : []);
 const isUuid = (value) => typeof value === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -397,6 +557,8 @@ const makeField = (idx = 1) => ({
   required: false,
   default: '',
   visibleOnBlock: true,
+  x: 0.5,
+  y: Math.min(0.9, 0.22 + (idx - 1) * 0.16),
   optionsCsv: '',
 });
 const normalizePortsForApi = () =>
@@ -409,12 +571,81 @@ const normalizeFieldsForApi = () =>
     required: Boolean(field.required),
     default: field.default ?? '',
     visibleOnBlock: field.visibleOnBlock !== false,
+    x: clamp01(field.x),
+    y: clamp01(field.y),
     options: field.type === 'select' ? fromOptionsCsv(field.optionsCsv) : [],
   }));
 const addPort = () => elementPorts.value.push(makePort());
 const removePort = (idx) => elementPorts.value.splice(idx, 1);
-const addField = () => elementFields.value.push(makeField(elementFields.value.length + 1));
-const removeField = (idx) => elementFields.value.splice(idx, 1);
+const selectField = (idx) => {
+  if (idx < 0 || idx >= elementFields.value.length) {
+    selectedFieldIndex.value = -1;
+    return;
+  }
+  selectedFieldIndex.value = idx;
+};
+const addField = () => {
+  elementFields.value.push(makeField(elementFields.value.length + 1));
+  selectedFieldIndex.value = elementFields.value.length - 1;
+};
+const removeField = (idx) => {
+  if (idx < 0 || idx >= elementFields.value.length) return;
+  elementFields.value.splice(idx, 1);
+  if (elementFields.value.length === 0) {
+    selectedFieldIndex.value = -1;
+    return;
+  }
+  if (selectedFieldIndex.value >= elementFields.value.length) {
+    selectedFieldIndex.value = elementFields.value.length - 1;
+  } else if (idx <= selectedFieldIndex.value) {
+    selectedFieldIndex.value = Math.max(0, selectedFieldIndex.value - 1);
+  }
+};
+const beginPreviewFieldDrag = (fieldIndex, event) => {
+  if (event.button !== 0) return;
+  const canvas = previewCanvasRef.value;
+  const field = elementFields.value[fieldIndex];
+  if (!canvas || !field) return;
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+
+  previewDrag.active = true;
+  previewDrag.fieldIndex = fieldIndex;
+  previewDrag.startClientX = event.clientX;
+  previewDrag.startClientY = event.clientY;
+  previewDrag.startX = clamp01(field.x ?? 0.5);
+  previewDrag.startY = clamp01(field.y ?? 0.5);
+  previewDrag.rect = rect;
+
+  window.addEventListener('pointermove', handlePreviewFieldDragMove);
+  window.addEventListener('pointerup', finishPreviewFieldDrag);
+  window.addEventListener('pointercancel', finishPreviewFieldDrag);
+};
+const handlePreviewFieldDragMove = (event) => {
+  if (!previewDrag.active) return;
+  const field = elementFields.value[previewDrag.fieldIndex];
+  const rect = previewDrag.rect;
+  if (!field || !rect || !rect.width || !rect.height) return;
+
+  const dx = (event.clientX - previewDrag.startClientX) / rect.width;
+  const dy = (event.clientY - previewDrag.startClientY) / rect.height;
+  field.x = clamp01(previewDrag.startX + dx);
+  field.y = clamp01(previewDrag.startY + dy);
+};
+const finishPreviewFieldDrag = () => {
+  if (!previewDrag.active) return;
+  previewDrag.active = false;
+  previewDrag.fieldIndex = -1;
+  previewDrag.rect = null;
+  window.removeEventListener('pointermove', handlePreviewFieldDragMove);
+  window.removeEventListener('pointerup', finishPreviewFieldDrag);
+  window.removeEventListener('pointercancel', finishPreviewFieldDrag);
+};
+const toHexColor = (value) => {
+  if (typeof value !== 'string') return '#000000';
+  return value.startsWith('#') ? value : `#${value}`;
+};
+const toPickerColor = (value) => String(value || '#3498db').replace('#', '');
 
 const resetElementForm = () => {
   selectedElementType.value = null;
@@ -430,6 +661,7 @@ const resetElementForm = () => {
   });
   elementPorts.value = [];
   elementFields.value = [];
+  selectedFieldIndex.value = -1;
 };
 
 const resetConnectionForm = () => {
@@ -466,8 +698,24 @@ const fillElementForm = ({ data }) => {
     required: Boolean(field?.required),
     default: field?.default ?? '',
     visibleOnBlock: field?.visibleOnBlock !== false,
+    x: clamp01(field?.x ?? 0.5),
+    y: clamp01(field?.y ?? Math.min(0.9, 0.22 + idx * 0.16)),
     optionsCsv: toOptionsCsv(field?.options),
   }));
+  selectedFieldIndex.value = elementFields.value.length ? 0 : -1;
+};
+
+const openCreateElementDialog = () => {
+  elementEditor.mode = 'create';
+  resetElementForm();
+  elementEditor.visible = true;
+};
+
+const openEditElementDialog = () => {
+  if (!selectedElementType.value) return;
+  elementEditor.mode = 'edit';
+  fillElementForm({ data: selectedElementType.value });
+  elementEditor.visible = true;
 };
 
 const fillConnectionForm = ({ data }) => {
@@ -593,6 +841,12 @@ const deleteElement = async () => {
   } catch (e) { fail(e.message || 'Failed to delete element'); }
 };
 
+const submitElementEditor = async () => {
+  if (elementEditor.mode === 'edit') await updateElement();
+  else await createElement();
+  if (!errorMessage.value) elementEditor.visible = false;
+};
+
 const createConnectionType = async () => {
   if (!selectedDiagramTypeId.value || !canMutate.value) return;
   try {
@@ -657,42 +911,223 @@ const applySelectedType = () => {
 };
 
 watch(() => visible.value, async (isOpen) => { if (isOpen) await reloadCatalog(); });
+watch(() => elementEditor.visible, (isOpen) => {
+  if (!isOpen) finishPreviewFieldDrag();
+});
 watch(() => props.currentDiagramTypeId, (id) => {
   const normalized = normalizeDiagramTypeId(id);
   if (isUuid(normalized)) {
     selectedDiagramTypeId.value = normalized;
   }
 });
+onBeforeUnmount(() => {
+  finishPreviewFieldDrag();
+});
 </script>
 
-<style scoped>
+<style>
+.rules-dialog {
+  --rt-surface: var(--app-panel, #ffffff);
+  --rt-surface-soft: var(--app-panel-soft, #f8fafc);
+  --rt-border: var(--app-border, #d1d5db);
+  --rt-text: var(--app-text, #1f2937);
+  --rt-muted: var(--app-muted, #64748b);
+}
+
 .top-bar { display: flex; justify-content: space-between; gap: 1rem; align-items: center; margin-bottom: 1rem; flex-wrap: wrap; }
-.grid2 { display: grid; grid-template-columns: repeat(2, minmax(560px, 1fr)); gap: 1rem; align-items: start; }
-.card { border: 1px solid var(--app-border, #e2e8f0); border-radius: 10px; padding: 1rem; background: var(--app-panel, #fff); min-height: 58vh; overflow: auto; color: var(--app-text, #1f2937); }
-.form { display: grid; grid-template-columns: 1fr; gap: 0.35rem; margin-bottom: 0.8rem; }
-.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(540px, 1fr)); gap: 1rem; align-items: start; }
+.card {
+  border: 1px solid var(--rt-border);
+  border-radius: 12px;
+  padding: 1rem;
+  background: var(--rt-surface);
+  min-height: 58vh;
+  overflow: auto;
+  color: var(--rt-text);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+}
+.card h4 {
+  margin: 0 0 0.75rem;
+  font-size: 1rem;
+  color: var(--rt-text);
+}
+.form { display: grid; grid-template-columns: 1fr; gap: 0.4rem; margin-bottom: 0.8rem; }
+.form label {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--rt-muted);
+}
+.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
 .muted { color: var(--app-muted, #64748b); }
-.matrix-cell { border: 1px solid var(--app-border, #e2e8f0); border-radius: 8px; padding: 0.4rem; background: var(--app-panel-soft, #f8fafc); min-width: 170px; display: flex; flex-direction: column; gap: 0.3rem; }
+.matrix-cell { border: 1px solid var(--rt-border); border-radius: 8px; padding: 0.4rem; background: var(--rt-surface-soft); min-width: 170px; display: flex; flex-direction: column; gap: 0.3rem; }
 .matrix-cell.editable { cursor: pointer; border-color: #7dd3fc; }
 .rule-row { display: flex; justify-content: space-between; align-items: center; gap: 0.35rem; }
 .rule-name { display: inline-flex; align-items: center; gap: 0.35rem; }
 .rule-line { flex: 0 0 auto; }
-.rule-editor-row { border: 1px solid var(--app-border, #e2e8f0); border-radius: 8px; padding: 0.5rem; margin-top: 0.5rem; display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; background: var(--app-panel-soft, #f8fafc); }
+.rule-editor-row { border: 1px solid var(--rt-border); border-radius: 8px; padding: 0.5rem; margin-top: 0.5rem; display: flex; justify-content: space-between; gap: 0.5rem; align-items: center; background: var(--rt-surface-soft); }
 
-.builder-box { border: 1px solid var(--app-border, #d1d5db); border-radius: 8px; padding: 0.5rem; background: var(--app-panel-soft, #f8fafc); display: flex; flex-direction: column; gap: 0.4rem; }
-.builder-row { display: grid; gap: 0.4rem; align-items: center; background: var(--app-panel, #fff); border: 1px solid var(--app-border, #e5e7eb); border-radius: 8px; padding: 0.4rem; }
-.ports-row { grid-template-columns: auto 120px 120px 1fr auto; }
-.field-row { grid-template-columns: auto 1fr 1fr 130px 1fr auto auto minmax(220px, 1fr) auto; }
-.builder-index { font-size: 0.8rem; color: var(--app-muted, #6b7280); min-width: 26px; text-align: center; }
-.switch-wrap { display: flex; flex-direction: column; gap: 0.25rem; align-items: flex-start; }
+.builder-section {
+  border: 1px solid var(--rt-border);
+  border-radius: 12px;
+  padding: 0.75rem;
+  background: var(--rt-surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+.builder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.builder-header h4 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+.builder-item {
+  border: 1px solid var(--rt-border);
+  border-radius: 10px;
+  padding: 0.65rem;
+  background: var(--rt-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.builder-item-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+.builder-index {
+  font-size: 0.82rem;
+  color: var(--rt-muted);
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rt-border);
+  border-radius: 8px;
+  background: var(--rt-surface-soft);
+}
+.builder-empty {
+  border: 1px dashed var(--rt-border);
+  border-radius: 10px;
+  padding: 0.85rem;
+  color: var(--rt-muted);
+  text-align: center;
+  background: rgba(148, 163, 184, 0.08);
+}
+.fields-layout {
+  display: grid;
+  grid-template-columns: 230px minmax(0, 1fr);
+  gap: 0.75rem;
+  min-height: 260px;
+}
+.fields-list {
+  border: 1px solid var(--rt-border);
+  border-radius: 10px;
+  background: var(--rt-surface);
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow: auto;
+}
+.field-chip {
+  appearance: none;
+  border: 1px solid var(--rt-border);
+  background: var(--rt-surface-soft);
+  color: var(--rt-text);
+  border-radius: 8px;
+  text-align: left;
+  padding: 0.5rem 0.6rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.field-chip:hover {
+  border-color: var(--app-accent, #0f766e);
+}
+.field-chip.active {
+  border-color: var(--app-accent, #0f766e);
+  box-shadow: inset 0 0 0 1px var(--app-accent, #0f766e);
+}
+.field-chip-title {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+.field-chip-sub {
+  color: var(--rt-muted);
+  font-size: 0.75rem;
+}
+.field-editor-panel {
+  border: 1px solid var(--rt-border);
+  border-radius: 10px;
+  background: var(--rt-surface);
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.field-editor-empty {
+  min-height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.compact-grid {
+  display: grid;
+  gap: 0.6rem;
+}
+.compact-grid.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.compact-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.compact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.compact-field label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--rt-muted);
+}
+.switch-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  align-items: flex-start;
+  min-width: 80px;
+}
+.switch-wrap-wide {
+  border: 1px solid var(--rt-border);
+  border-radius: 10px;
+  padding: 0.5rem 0.7rem;
+  background: var(--rt-surface-soft);
+}
+.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.editor-card {
+  min-height: 52vh;
+}
+.color-row { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem; align-items: center; }
+.preview-block-editor {
+  margin-top: 0.8rem;
+}
 
 .preview-block { margin-bottom: 0.8rem; display: flex; flex-direction: column; gap: 0.35rem; }
 .preview-canvas {
-  border: 1px dashed var(--app-border, #cbd5e1);
+  border: 1px dashed var(--rt-border);
   border-radius: 10px;
   min-height: 180px;
   padding: 0.8rem;
-  background: var(--app-panel-soft, #f8fafc);
+  background: var(--rt-surface-soft);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -704,23 +1139,62 @@ watch(() => props.currentDiagramTypeId, (id) => {
   flex-direction: column;
   gap: 0.35rem;
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+  position: relative;
+  overflow: hidden;
 }
 .preview-title { font-weight: 700; text-align: center; border-bottom: 1px solid rgba(255, 255, 255, 0.35); padding-bottom: 0.25rem; }
 .preview-field { font-size: 0.8rem; opacity: 0.95; border-top: 1px solid rgba(255, 255, 255, 0.22); padding-top: 0.25rem; }
+.preview-field-placed {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  border-top: none;
+}
+.preview-field-placed.draggable {
+  cursor: grab;
+  pointer-events: auto;
+  user-select: none;
+}
+.preview-field-placed.draggable.dragging {
+  cursor: grabbing;
+  z-index: 3;
+}
 
-.rules-dialog :deep(.p-dialog),
+.rules-dialog.p-dialog {
+  background: var(--rt-surface) !important;
+  color: var(--rt-text) !important;
+  border: 1px solid var(--rt-border) !important;
+}
+
 .rules-dialog :deep(.p-dialog-header),
 .rules-dialog :deep(.p-dialog-content),
 .rules-dialog :deep(.p-dialog-footer) {
-  background: var(--app-panel, #ffffff) !important;
-  color: var(--app-text, #1f2937) !important;
+  background: var(--rt-surface) !important;
+  color: var(--rt-text) !important;
+}
+
+.rules-dialog.p-dialog,
+.rules-dialog .p-dialog-header,
+.rules-dialog .p-dialog-content,
+.rules-dialog .p-dialog-footer,
+.rules-dialog .p-tabview,
+.rules-dialog .p-tabview-panels,
+.rules-dialog .p-tabview-panel,
+.rules-dialog .p-tabview-nav,
+.rules-dialog .p-tabview-nav-link {
+  background: var(--rt-surface) !important;
+  color: var(--rt-text) !important;
 }
 
 .rules-dialog :deep(.p-tabview-nav),
 .rules-dialog :deep(.p-tabview-panels),
 .rules-dialog :deep(.p-tabview-panel) {
-  background: var(--app-panel, #ffffff) !important;
-  color: var(--app-text, #1f2937) !important;
+  background: var(--rt-surface) !important;
+  color: var(--rt-text) !important;
 }
 
 .rules-dialog :deep(.p-component),
@@ -728,20 +1202,34 @@ watch(() => props.currentDiagramTypeId, (id) => {
 .rules-dialog :deep(.p-tabview-panels),
 .rules-dialog :deep(.p-tabview-panel),
 .rules-dialog :deep(.p-dialog-content > div) {
-  color: var(--app-text, #1f2937) !important;
+  color: var(--rt-text) !important;
 }
 
 .rules-dialog :deep(.p-datatable),
 .rules-dialog :deep(.p-datatable-table),
 .rules-dialog :deep(.p-datatable-thead > tr > th),
 .rules-dialog :deep(.p-datatable-tbody > tr > td) {
-  background: var(--app-panel, #ffffff);
-  color: var(--app-text, #1f2937);
-  border-color: var(--app-border, #e2e8f0);
+  background: var(--rt-surface);
+  color: var(--rt-text);
+  border-color: var(--rt-border);
+}
+.rules-dialog :deep(.p-datatable-thead > tr > th) {
+  background: var(--rt-surface) !important;
+}
+.rules-dialog :deep(.p-datatable-tbody > tr > td) {
+  background: var(--rt-surface-soft) !important;
+}
+.rules-dialog :deep(.p-datatable-wrapper),
+.rules-dialog :deep(.p-datatable-table-container) {
+  background: var(--rt-surface) !important;
+}
+
+.p-dialog-mask {
+  background: rgba(2, 6, 23, 0.55) !important;
 }
 
 .rules-dialog :deep(.p-dialog-content) {
-  background: var(--app-panel, #ffffff) !important;
+  background: var(--rt-surface) !important;
   max-height: 86vh;
   overflow: auto;
 }
@@ -753,26 +1241,69 @@ watch(() => props.currentDiagramTypeId, (id) => {
 .rules-dialog :deep(.p-selectbutton),
 .rules-dialog :deep(.p-textarea) {
   width: 100%;
-  background: var(--app-panel, #fff);
-  color: var(--app-text, #1f2937);
-  border-color: var(--app-border, #d1d5db);
+  background: var(--rt-surface);
+  color: var(--rt-text);
+  border-color: var(--rt-border);
 }
 
 .rules-dialog :deep(.p-dropdown-panel),
 .rules-dialog :deep(.p-multiselect-panel) {
-  background: var(--app-panel, #fff);
-  color: var(--app-text, #1f2937);
+  background: var(--rt-surface);
+  color: var(--rt-text);
+  border: 1px solid var(--rt-border);
 }
 
 .rules-dialog :deep(.p-dropdown-item),
 .rules-dialog :deep(.p-multiselect-item) {
-  color: var(--app-text, #1f2937);
+  color: var(--rt-text);
+}
+
+html[data-theme='dark'] .p-dialog.rules-dialog,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-dialog-header,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-dialog-content,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-dialog-footer,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-tabview,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-tabview-panels,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-tabview-panel,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-tabview-nav,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-tabview-nav-link,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-datatable,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-datatable-table,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-datatable-wrapper,
+html[data-theme='dark'] .p-dialog.rules-dialog .p-datatable-table-container {
+  background: #111827 !important;
+  color: #e2e8f0 !important;
+  border-color: #2b3850 !important;
+}
+
+html[data-theme='dark'] .p-dialog.rules-dialog .p-datatable-tbody > tr > td,
+html[data-theme='dark'] .p-dialog.rules-dialog .builder-section,
+html[data-theme='dark'] .p-dialog.rules-dialog .matrix-cell,
+html[data-theme='dark'] .p-dialog.rules-dialog .preview-canvas,
+html[data-theme='dark'] .p-dialog.rules-dialog .builder-index {
+  background: #0f172a !important;
+}
+
+html[data-theme='dark'] .p-dialog.rules-dialog .card,
+html[data-theme='dark'] .p-dialog.rules-dialog .builder-item,
+html[data-theme='dark'] .p-dialog.rules-dialog .fields-list,
+html[data-theme='dark'] .p-dialog.rules-dialog .field-editor-panel {
+  background: #111827 !important;
+  color: #e2e8f0 !important;
+  border-color: #2b3850 !important;
 }
 
 @media (max-width: 1400px) {
   .grid2 { grid-template-columns: 1fr; }
   .card { min-height: 42vh; }
-  .ports-row { grid-template-columns: auto 1fr 1fr 1fr auto; }
-  .field-row { grid-template-columns: auto 1fr 1fr 1fr 1fr auto auto 1fr auto; }
+  .editor-grid { grid-template-columns: 1fr; }
+  .compact-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fields-layout { grid-template-columns: 1fr; min-height: 0; }
+  .fields-list { max-height: 180px; }
+}
+
+@media (max-width: 1024px) {
+  .compact-grid.two,
+  .compact-grid.three { grid-template-columns: 1fr; }
 }
 </style>

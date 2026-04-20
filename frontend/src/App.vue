@@ -428,6 +428,14 @@
                   <div class="element-text-main" :style="{ fontSize: (element.fontSize || 14) + 'px' }">
                       {{ element.text || getDefaultText(element.type) }}
                   </div>
+                  <div
+                    v-for="(field, idx) in getElementVisibleFields(element)"
+                    :key="`field-${element.id}-${idx}`"
+                    class="element-field-label"
+                    :style="getElementFieldStyle(field)"
+                  >
+                    {{ field.label || field.key || `field_${idx + 1}` }}
+                  </div>
                   <div class="element-type-tag">{{ element.type }}</div>
               </template>
               

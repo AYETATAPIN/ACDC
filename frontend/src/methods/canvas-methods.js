@@ -91,7 +91,23 @@ getElementPreset(type) {
       return this.elementPresets.find(p => p.type === type);
     },
 
-isConnectionTool(tool) {
+    getElementVisibleFields(element) {
+      const schema = this.getElementPreset(element?.type)?.field_schema;
+      if (!Array.isArray(schema)) return [];
+      return schema.filter((field) => field && field.visibleOnBlock !== false);
+    },
+
+    getElementFieldStyle(field) {
+      const clamp = (v, fallback) => Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : fallback));
+      const x = clamp(field?.x, 0.5);
+      const y = clamp(field?.y, 0.5);
+      return {
+        left: `${(x * 100).toFixed(1)}%`,
+        top: `${(y * 100).toFixed(1)}%`,
+      };
+    },
+
+    isConnectionTool(tool) {
       return this.connectionToolTypes.includes(tool);
     },
 

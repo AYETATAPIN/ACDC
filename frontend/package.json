@@ -8,10 +8,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "primeicons": "^7.0.0",
+    "primevue": "^3.53.1",
     "vue": "^3.4.15"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
-    "vite": "^5.1.4"
+    "vite": "5.1.4"
   }
 }

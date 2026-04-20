@@ -1,149 +1,154 @@
 <template>
-  <aside class="properties-panel" v-if="selectedElement || selectedConnection">
-    <div class="properties-header">
+  <aside class="panel" v-if="selectedElement || selectedConnection">
+    <div class="header">
       <h3>{{ selectedElement ? 'Свойства элемента' : 'Свойства связи' }}</h3>
-      <button @click="deselectAll" class="close-btn">×</button>
+      <Button icon="pi pi-times" text rounded @click="deselectAll" />
     </div>
-    <div class="properties-content">
-      <template v-if="selectedElement">
-        <div class="prop-group" v-if="selectedElement.type === 'class'">
-            <label>Атрибуты (каждый с новой строки)</label>
-            <textarea 
-                v-model="classAttributes" 
-                @input="updateClassProperties"
-                placeholder="name: String&#10;age: Integer&#10;email: String"
-                rows="4"
-                class="property-textarea"
-            />
-        </div>
 
-        <div class="prop-group" v-if="selectedElement.type === 'class'">
-            <label>Операции (каждый с новой строки)</label>
-            <textarea 
-                v-model="classOperations" 
-                @input="updateClassProperties"
-                placeholder="getName(): String&#10;setName(name: String): void&#10;calculateAge(): Integer"
-                rows="4"
-                class="property-textarea"
-            />
-        </div>
-        <div class="prop-group">
-          <label>Текст</label>
-          <input v-model="selectedElement.text" placeholder="Введите текст" />
-        </div>
-        <div class="prop-group">
-          <label>Размер шрифта</label>
-          <input type="range" min="10" max="30" v-model.number="selectedElement.fontSize" />
-          <span>{{ selectedElement.fontSize || 14 }}px</span>
-        </div>
-        <div class="prop-group">
-          <label>Цвет фона</label>
-          <input type="color" :value="selectedElement.customColor || getElementPreset(selectedElement.type)?.color || '#95a5a6'" @input="selectedElement.customColor = $event.target.value" />
-        </div>
-        <div class="prop-group">
-          <label>Цвет границы</label>
-          <input type="color" :value="selectedElement.customBorder || getElementPreset(selectedElement.type)?.border || '#2c3e50'" @input="selectedElement.customBorder = $event.target.value" />
-        </div>
-        <div class="prop-group">
-          <label>Тип</label>
-          <span class="prop-value">{{ selectedElement.type }}</span>
-        </div>
-      </template>
+    <div class="content" v-if="selectedElement">
+      <div class="field" v-if="selectedElement.type === 'class'">
+        <label>Атрибуты</label>
+        <Textarea v-model="classAttributes" rows="4" autoResize @update:modelValue="updateClassProperties" />
+      </div>
 
-      <template v-else-if="selectedConnection">
-        <div class="prop-group">
-          <label>Удалить связь</label>
-          <button 
-            class="tool-btn delete-btn"
-            @click="deleteConnection(selectedConnection)"
-          >
-            🗑️ Удалить связь
-          </button>
-          <span class="prop-hint">Удалить выбранную связь</span>
-        </div>
+      <div class="field" v-if="selectedElement.type === 'class'">
+        <label>Операции</label>
+        <Textarea v-model="classOperations" rows="4" autoResize @update:modelValue="updateClassProperties" />
+      </div>
 
-        <div class="prop-group">
-          <label>Надпись</label>
-          <input v-model="selectedConnection.label" placeholder="Текст надписи" />
-        </div>
+      <div class="field">
+        <label>Текст</label>
+        <InputText v-model="selectedElement.text" />
+      </div>
 
-        <div class="prop-group">
-          <label>Цвет надписи</label>
-          <input type="color" v-model="selectedConnection.labelColor" />
+      <div class="field">
+        <label>Размер шрифта</label>
+        <div class="row slider-row">
+          <div class="slider-wrap">
+            <Slider v-model="selectedElement.fontSize" :min="10" :max="30" />
+          </div>
+          <Tag :value="`${selectedElement.fontSize || 14}px`" />
         </div>
+      </div>
 
-        <div class="prop-group">
-          <label>Размер шрифта надписи</label>
-          <input type="range" min="8" max="24" step="1" v-model.number="selectedConnection.labelFontSize" />
-          <span>{{ selectedConnection.labelFontSize || 12 }}px</span>
-        </div>
-        
-        <div class="prop-group">
-          <label>Цвет линии</label>
-          <input type="color" v-model="selectedConnection.customColor" />
-        </div>
+      <div class="field">
+        <label>Цвет фона</label>
+        <ColorPicker
+          :modelValue="selectedElement.customColor || getElementPreset(selectedElement.type)?.color || '#95a5a6'"
+          @update:modelValue="selectedElement.customColor = toHexColor($event)"
+        />
+      </div>
 
-        <div class="prop-group">
-          <label>Стиль линии</label>
-          <select v-model="selectedConnection.customDash">
-            <option value="">Сплошная</option>
-            <option value="6 4">Пунктир</option>
-            <option value="10 6">Длинный пунктир</option>
-            <option value="3 3">Точечная</option>
-          </select>
-        </div>
+      <div class="field">
+        <label>Цвет границы</label>
+        <ColorPicker
+          :modelValue="selectedElement.customBorder || getElementPreset(selectedElement.type)?.border || '#2c3e50'"
+          @update:modelValue="selectedElement.customBorder = toHexColor($event)"
+        />
+      </div>
 
-        <div class="prop-group">
-          <label>Точки изгиба</label>
-          <button class="tool-btn" @click="selectedConnection && addBendPointAtMidpoint(selectedConnection)">
-            Добавить точку
-          </button>
-          <button
-            class="tool-btn"
-            :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
-            @click="selectedBendPoint?.connId ? removeSelectedBendPoint() : (selectedConnection && removeLastBendPoint(selectedConnection))"
-          >
-            Удалить точку
-          </button>
-          <button
-            class="tool-btn"
-            :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
-            @click="selectedConnection && clearBendPoints(selectedConnection)"
-          >
-            Удалить все точки
-          </button>
-          <span class="prop-hint">Alt/Option + клик по линии добавляет/удаляет точку рядом с кликом</span>
-        </div>
+      <Tag severity="info" :value="`Тип: ${selectedElement.type}`" />
+    </div>
 
-        <div class="prop-group">
-          <label>Тип связи</label>
-          <span class="prop-value">{{ selectedConnection.type }}</span>
+    <div class="content" v-else-if="selectedConnection">
+      <div class="field">
+        <label>Надпись</label>
+        <InputText v-model="selectedConnection.label" />
+      </div>
+
+      <div class="field">
+        <label>Цвет надписи</label>
+        <ColorPicker
+          :modelValue="selectedConnection.labelColor || '#2c3e50'"
+          @update:modelValue="selectedConnection.labelColor = toHexColor($event)"
+        />
+      </div>
+
+      <div class="field">
+        <label>Размер надписи</label>
+        <div class="row slider-row">
+          <div class="slider-wrap">
+            <Slider v-model="selectedConnection.labelFontSize" :min="8" :max="24" />
+          </div>
+          <Tag :value="`${selectedConnection.labelFontSize || 12}px`" />
         </div>
-      </template>
+      </div>
+
+      <div class="field">
+        <label>Цвет линии</label>
+        <ColorPicker
+          :modelValue="selectedConnection.customColor || '#34495e'"
+          @update:modelValue="selectedConnection.customColor = toHexColor($event)"
+        />
+      </div>
+
+      <div class="field">
+        <label>Стиль линии</label>
+        <Dropdown v-model="selectedConnection.customDash" :options="dashOptions" optionLabel="label" optionValue="value" />
+      </div>
+
+      <div class="actions">
+        <Button icon="pi pi-plus" label="Точка изгиба" size="small" outlined @click="addSelectedBendPoint()" />
+        <Button
+          icon="pi pi-minus-circle"
+          label="Удалить точку"
+          size="small"
+          outlined
+          :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
+          @click="selectedBendPoint?.connId ? removeSelectedBendPoint() : (selectedConnection && removeLastBendPoint(selectedConnection))"
+        />
+        <Button
+          icon="pi pi-trash"
+          label="Удалить все точки"
+          size="small"
+          outlined
+          :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
+          @click="selectedConnection && clearBendPoints(selectedConnection)"
+        />
+        <Button icon="pi pi-times" label="Удалить связь" size="small" severity="danger" @click="deleteConnection(selectedConnection)" />
+      </div>
+
+      <Tag :severity="selectedConnection.rule_violation ? 'warning' : 'info'" :value="selectedConnection.rule_violation ? 'Нарушение правила' : `Тип: ${selectedConnection.type}`" />
     </div>
   </aside>
 </template>
 
 <script>
+import Button from 'primevue/button';
+import InputText from 'primevue/inputtext';
+import Slider from 'primevue/slider';
+import Tag from 'primevue/tag';
+import Dropdown from 'primevue/dropdown';
+import Textarea from 'primevue/textarea';
+import ColorPicker from 'primevue/colorpicker';
+
 export default {
   name: 'DiagramPropertiesPanel',
+  components: { Button, InputText, Slider, Tag, Dropdown, Textarea, ColorPicker },
   props: {
     selectedElement: { type: Object, default: null },
     selectedConnection: { type: Object, default: null },
     selectedBendPoint: { type: Object, default: null },
     getElementPreset: { type: Function, required: true },
     deselectAll: { type: Function, required: true },
+    addSelectedBendPoint: { type: Function, required: true },
     deleteConnection: { type: Function, required: true },
     addBendPointAtMidpoint: { type: Function, required: true },
     hasBendPoints: { type: Function, required: true },
     clearBendPoints: { type: Function, required: true },
     removeSelectedBendPoint: { type: Function, required: true },
-    removeLastBendPoint: { type: Function, required: true }
+    removeLastBendPoint: { type: Function, required: true },
   },
   data() {
     return {
       classAttributes: '',
-      classOperations: ''
+      classOperations: '',
+      dashOptions: [
+        { label: 'Сплошная', value: '' },
+        { label: 'Пунктир', value: '6 4' },
+        { label: 'Длинный пунктир', value: '10 6' },
+        { label: 'Точки', value: '3 3' },
+      ],
     };
   },
   watch: {
@@ -154,40 +159,107 @@ export default {
           this.classAttributes = (newElement.properties?.attributes || []).join('\n');
           this.classOperations = (newElement.properties?.operations || []).join('\n');
         }
-      }
-    }
+      },
+    },
   },
   methods: {
+    toHexColor(value) {
+      if (typeof value !== 'string') return '#000000';
+      return value.startsWith('#') ? value : `#${value}`;
+    },
     updateClassProperties() {
-      if (this.selectedElement?.type === 'class') {
-        // Обновляем properties напрямую (реактивно)
-        this.selectedElement.properties = {
-          ...this.selectedElement.properties,
-          attributes: this.classAttributes.split('\n').filter(line => line.trim() !== ''),
-          operations: this.classOperations.split('\n').filter(line => line.trim() !== '')
-        };
-      }
-    }
-  }
+      if (this.selectedElement?.type !== 'class') return;
+      this.selectedElement.properties = {
+        ...this.selectedElement.properties,
+        attributes: this.classAttributes.split('\n').filter((line) => line.trim() !== ''),
+        operations: this.classOperations.split('\n').filter((line) => line.trim() !== ''),
+      };
+    },
+  },
 };
 </script>
 
 <style scoped>
-.property-textarea {
+.panel {
+  width: 320px;
+  min-width: 300px;
+  border-left: 1px solid var(--app-border, #dbe7ef);
+  background: var(--app-sidebar-bg, var(--app-panel-soft, #f8fbff));
+  padding: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--app-accent, #14b8a6);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+}
+
+.header h3 {
+  margin: 0;
+  color: #ffffff;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.field label {
+  font-size: 0.8rem;
+  color: var(--app-muted, #334155);
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.slider-row {
+  min-width: 0;
+}
+
+.slider-wrap {
+  flex: 1 1 auto;
+  min-width: 140px;
+  display: flex;
+  align-items: center;
+}
+
+.slider-wrap :deep(.p-slider) {
   width: 100%;
-  padding: 0.5rem;
-  border: 1px solid #d0d7de;
-  border-radius: 4px;
-  font-family: monospace;
-  font-size: 0.9rem;
-  resize: vertical;
 }
-.delete-btn {
-  background: #e74c3c !important;
-  color: white !important;
-  border-color: #c0392b !important;
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
 }
-.delete-btn:hover {
-  background: #c0392b !important;
+
+.panel :deep(.p-inputtext),
+.panel :deep(.p-inputnumber-input),
+.panel :deep(.p-dropdown),
+.panel :deep(.p-textarea) {
+  background: var(--app-panel, #ffffff);
+  border-color: var(--app-border, #dbe7ef);
+  color: var(--app-text, #1f2937);
+}
+
+.panel :deep(.p-tag) {
+  border: 1px solid var(--app-border, #dbe7ef);
 }
 </style>

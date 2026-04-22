@@ -12,7 +12,7 @@ export class DiagramConnectionController {
 
   getByDiagramId = async (req: Request, res: Response) => {
     const { diagramId } = req.params;
-    const items = await this.service.getByDiagramId(diagramId);
+    const items = await this.service.getByDiagramId(req.auth.userId!, diagramId);
     res.json({ items });
   };
 
@@ -21,7 +21,7 @@ export class DiagramConnectionController {
     if (!parsed.ok) return res.status(400).json({ error: parsed.error });
 
     try {
-      const result = await this.service.create(parsed.data);
+      const result = await this.service.create(req.auth.userId!, parsed.data);
       return res.status(201).json(result);
     } catch (error) {
       if (error instanceof ConnectionRuleViolationError) {
@@ -33,7 +33,7 @@ export class DiagramConnectionController {
 
   remove = async (req: Request, res: Response) => {
     const { id } = req.params;
-    const ok = await this.service.delete(id);
+    const ok = await this.service.delete(req.auth.userId!, id);
     if (!ok) return res.status(404).json({ error: 'Diagram connection not found' });
     return res.status(200).json({ success: true });
   };
@@ -44,7 +44,7 @@ export class DiagramConnectionController {
     if (!parsed.ok) return res.status(400).json({ error: parsed.error });
 
     try {
-      const updated = await this.service.update(id, parsed.data);
+      const updated = await this.service.update(req.auth.userId!, id, parsed.data);
       if (!updated) return res.status(404).json({ error: 'Diagram connection not found' });
       return res.json(updated);
     } catch (error) {
@@ -60,7 +60,7 @@ export class DiagramConnectionController {
     const parsed = validateBendPointCreate(req.body);
     if (!parsed.ok) return res.status(400).json({ error: parsed.error });
 
-    const connection = await this.service.addBendPoint(id, parsed.data.position);
+    const connection = await this.service.addBendPoint(req.auth.userId!, id, parsed.data.position);
     if (!connection) return res.status(404).json({ error: 'Diagram connection not found' });
     return res.json(connection);
   };

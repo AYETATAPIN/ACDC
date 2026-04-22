@@ -10,7 +10,7 @@ export class DiagramHistoryController {
 
     history = async (req: Request, res: Response) => {
         const {diagramId} = req.params;
-        const result = await this.service.getHistory(diagramId);
+        const result = await this.service.getHistory(req.auth.userId!, diagramId);
 
         if (result.status === 'not_found') {
             return res.status(404).json({error: 'Diagram not found'});
@@ -24,7 +24,7 @@ export class DiagramHistoryController {
 
     undo = async (req: Request, res: Response) => {
         const {diagramId} = req.params;
-        const result = await this.service.undo(diagramId);
+        const result = await this.service.undo(req.auth.userId!, diagramId);
 
         if (result.status === 'not_found') return res.status(404).json({error: 'Diagram not found'});
         if (result.status === 'no_history') return res.status(400).json({error: 'Undo history is empty'});
@@ -34,7 +34,7 @@ export class DiagramHistoryController {
 
     redo = async (req: Request, res: Response) => {
         const {diagramId} = req.params;
-        const result = await this.service.redo(diagramId);
+        const result = await this.service.redo(req.auth.userId!, diagramId);
 
         if (result.status === 'not_found') return res.status(404).json({error: 'Diagram not found'});
         if (result.status === 'no_history') return res.status(400).json({error: 'Redo history is empty'});
@@ -44,7 +44,7 @@ export class DiagramHistoryController {
 
     current = async (req: Request, res: Response) => {
         const {diagramId} = req.params;
-        const result = await this.service.getCurrentState(diagramId);
+        const result = await this.service.getCurrentState(req.auth.userId!, diagramId);
 
         if (result.status === 'not_found') return res.status(404).json({error: 'Diagram not found'});
         if (result.status === 'no_history') return res.status(404).json({error: 'Diagram has no history yet'});

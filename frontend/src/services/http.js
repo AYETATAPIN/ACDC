@@ -25,6 +25,7 @@ export const apiRequest = async (path, { method = 'GET', body, headers } = {}) =
   const init = {
     method,
     headers: requestHeaders,
+    credentials: 'include',
   };
 
   if (body !== undefined) {

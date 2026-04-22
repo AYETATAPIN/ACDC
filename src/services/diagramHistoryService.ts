@@ -113,7 +113,7 @@ export class DiagramHistoryService {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
-      const diagramRow = await this.getDiagramRow(client, diagramId, true);
+      const diagramRow = await this.getDiagramRow(client, diagramId, undefined, true);
       if (!diagramRow) throw new Error('Diagram not found');
 
       await client.query('DELETE FROM diagram_history WHERE diagram_id = $1 AND version > $2', [diagramId, diagramRow.current_version ?? 0]);
@@ -156,18 +156,21 @@ export class DiagramHistoryService {
     }
   }
 
-  async undo(diagramId: string): Promise<UndoRedoResult> {
-    return this.restoreToVersion(diagramId, 'undo');
+  async undo(ownerUserId: string, diagramId: string): Promise<UndoRedoResult> {
+    return this.restoreToVersion(ownerUserId, diagramId, 'undo');
   }
 
-  async redo(diagramId: string): Promise<UndoRedoResult> {
-    return this.restoreToVersion(diagramId, 'redo');
+  async redo(ownerUserId: string, diagramId: string): Promise<UndoRedoResult> {
+    return this.restoreToVersion(ownerUserId, diagramId, 'redo');
   }
 
-  async getHistory(diagramId: string): Promise<HistoryListResult> {
+  async getHistory(ownerUserId: string, diagramId: string): Promise<HistoryListResult> {
     const client = await this.pool.connect();
     try {
-      const diagRes = await client.query<{ current_version: number }>('SELECT current_version FROM diagrams WHERE id = $1', [diagramId]);
+      const diagRes = await client.query<{ current_version: number }>(
+        'SELECT current_version FROM diagrams WHERE id = $1 AND owner_user_id = $2',
+        [diagramId, ownerUserId],
+      );
       if (diagRes.rows.length === 0) return { status: 'not_found' };
 
       const historyRes = await client.query<{ version: number; created_at: Date }>(
@@ -188,10 +191,10 @@ export class DiagramHistoryService {
     }
   }
 
-  async getCurrentState(diagramId: string): Promise<CurrentStateResult> {
+  async getCurrentState(ownerUserId: string, diagramId: string): Promise<CurrentStateResult> {
     const client = await this.pool.connect();
     try {
-      const diagramRow = await this.getDiagramRow(client, diagramId);
+      const diagramRow = await this.getDiagramRow(client, diagramId, ownerUserId);
       if (!diagramRow) return { status: 'not_found' };
 
       const version = diagramRow.current_version ?? 0;
@@ -206,12 +209,12 @@ export class DiagramHistoryService {
     }
   }
 
-  private async restoreToVersion(diagramId: string, direction: 'undo' | 'redo'): Promise<UndoRedoResult> {
+  private async restoreToVersion(ownerUserId: string, diagramId: string, direction: 'undo' | 'redo'): Promise<UndoRedoResult> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
 
-      const diagramRow = await this.getDiagramRow(client, diagramId, true);
+      const diagramRow = await this.getDiagramRow(client, diagramId, ownerUserId, true);
       if (!diagramRow) {
         await client.query('ROLLBACK');
         return { status: 'not_found' };
@@ -241,12 +244,25 @@ export class DiagramHistoryService {
     }
   }
 
-  private async getDiagramRow(client: PoolClient, diagramId: string, forUpdate = false): Promise<DiagramRow | null> {
+  private async getDiagramRow(
+    client: PoolClient,
+    diagramId: string,
+    ownerUserId?: string,
+    forUpdate = false,
+  ): Promise<DiagramRow | null> {
+    const conditions = ['id = $1'];
+    const values: Array<string> = [diagramId];
+
+    if (ownerUserId) {
+      conditions.push(`owner_user_id = $${values.length + 1}`);
+      values.push(ownerUserId);
+    }
+
     const res = await client.query<DiagramRow>(
       `SELECT id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at, current_version
        FROM diagrams
-       WHERE id = $1 ${forUpdate ? 'FOR UPDATE' : ''}`,
-      [diagramId],
+       WHERE ${conditions.join(' AND ')} ${forUpdate ? 'FOR UPDATE' : ''}`,
+      values,
     );
     return res.rows[0] ?? null;
   }

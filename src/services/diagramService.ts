@@ -6,6 +6,7 @@ import { DiagramConnectionRepository } from '../repositories/diagramConnectionRe
 import { DiagramHistoryService } from './diagramHistoryService.js';
 import { DiagramTypeRepository } from '../repositories/diagramTypeRepository.js';
 import { getBuiltinDiagramTypeIdByKind } from '../catalog/builtins.js';
+import { HttpError } from '../middleware/errorHandler.js';
 
 const LEGACY_TYPES: DiagramKind[] = ['class', 'use_case', 'activity_diagram', 'free_mode'];
 const isLegacyType = (value: unknown): value is DiagramKind => typeof value === 'string' && LEGACY_TYPES.includes(value as DiagramKind);
@@ -31,17 +32,26 @@ export class DiagramService {
     this.diagramTypeRepo = diagramTypeRepo;
   }
 
-  async list(): Promise<Diagram[]> {
-    return this.repo.list();
+  async list(ownerUserId: string): Promise<Diagram[]> {
+    return this.repo.listForOwner(ownerUserId);
   }
 
-  async get(id: string): Promise<Diagram | null> {
-    return this.repo.getById(id);
+  async get(ownerUserId: string, id: string): Promise<Diagram | null> {
+    return this.repo.getByIdForOwner(id, ownerUserId);
   }
 
-  private async resolveTypeAndDiagramTypeId(input: { type?: DiagramKind; diagram_type_id?: string }): Promise<{ type: DiagramKind; diagram_type_id: string }> {
+  private async resolveTypeAndDiagramTypeId(
+    ownerUserId: string,
+    input: { type?: DiagramKind; diagram_type_id?: string },
+  ): Promise<{ type: DiagramKind; diagram_type_id: string }> {
     if (input.diagram_type_id) {
       const typeEntity = await this.diagramTypeRepo.getById(input.diagram_type_id);
+      if (!typeEntity) {
+        throw new HttpError(400, 'Diagram type not found');
+      }
+      if (!typeEntity.is_builtin && typeEntity.owner_user_id !== ownerUserId) {
+        throw new HttpError(403, 'No access to this diagram type');
+      }
       const derivedType = isLegacyType(typeEntity?.key) ? (typeEntity?.key as DiagramKind) : input.type ?? 'class';
       return {
         type: input.type ?? derivedType,
@@ -56,11 +66,11 @@ export class DiagramService {
     };
   }
 
-  async create(input: DiagramCreateInput & { elements?: any[]; connections?: any[] }): Promise<{ id: string }> {
+  async create(ownerUserId: string, input: DiagramCreateInput & { elements?: any[]; connections?: any[] }): Promise<{ id: string }> {
     const id = uuidv4();
-    const resolved = await this.resolveTypeAndDiagramTypeId(input);
+    const resolved = await this.resolveTypeAndDiagramTypeId(ownerUserId, input);
 
-    await this.repo.create(id, {
+    await this.repo.create(id, ownerUserId, {
       ...input,
       type: resolved.type,
       diagram_type_id: resolved.diagram_type_id,
@@ -90,7 +100,7 @@ export class DiagramService {
       }
 
       if (input.connections && Array.isArray(input.connections)) {
-        const blocks = await this.blockRepo.getByDiagramId(id);
+        const blocks = await this.blockRepo.getByDiagramIdForOwner(id, ownerUserId);
         const blockIds = new Set(blocks.map((b) => b.id));
 
         for (const connection of input.connections) {
@@ -122,17 +132,17 @@ export class DiagramService {
     return { id };
   }
 
-  async update(id: string, input: DiagramUpdateInput & { elements?: any[]; connections?: any[] }): Promise<Diagram | null> {
-    const existing = await this.repo.getById(id);
+  async update(ownerUserId: string, id: string, input: DiagramUpdateInput & { elements?: any[]; connections?: any[] }): Promise<Diagram | null> {
+    const existing = await this.repo.getByIdForOwner(id, ownerUserId);
     if (!existing) return null;
 
-    const resolved = await this.resolveTypeAndDiagramTypeId({
+    const resolved = await this.resolveTypeAndDiagramTypeId(ownerUserId, {
       type: input.type ?? existing.type,
       diagram_type_id: input.diagram_type_id ?? existing.diagram_type_id,
     });
     const shouldUpdateTypeBinding = input.type !== undefined || input.diagram_type_id !== undefined;
 
-    const updated = await this.repo.update(id, {
+    const updated = await this.repo.updateForOwner(id, ownerUserId, {
       ...input,
       type: shouldUpdateTypeBinding ? resolved.type : undefined,
       diagram_type_id: shouldUpdateTypeBinding ? resolved.diagram_type_id : undefined,
@@ -167,7 +177,7 @@ export class DiagramService {
         }
 
         if (input.connections && Array.isArray(input.connections)) {
-          const blocks = await this.blockRepo.getByDiagramId(id);
+          const blocks = await this.blockRepo.getByDiagramIdForOwner(id, ownerUserId);
           const blockIds = new Set(blocks.map((b) => b.id));
 
           for (const connection of input.connections) {
@@ -200,10 +210,13 @@ export class DiagramService {
     return updated;
   }
 
-  async delete(id: string): Promise<boolean> {
+  async delete(ownerUserId: string, id: string): Promise<boolean> {
+    const existing = await this.repo.getByIdForOwner(id, ownerUserId);
+    if (!existing) return false;
+
     await this.connectionRepo.deleteByDiagramId(id);
     await this.blockRepo.deleteByDiagramId(id);
-    const ok = await this.repo.delete(id);
+    const ok = await this.repo.deleteForOwner(id, ownerUserId);
     return ok;
   }
 }

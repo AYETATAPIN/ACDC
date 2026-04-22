@@ -34,6 +34,10 @@
         <Button icon="pi pi-redo" label="Redo" outlined :disabled="!canRedo" @click="redoDiagram" />
         <Button :icon="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'" :label="isDarkTheme ? 'Светлая тема' : 'Темная тема'" outlined @click="toggleTheme" />
         <Button icon="pi pi-sitemap" label="Правила и типы" severity="help" outlined @click="openRulesDialog" />
+        <div v-if="authUser" class="auth-chip">
+          <span>{{ authUser.display_name || authUser.email }}</span>
+          <Button icon="pi pi-sign-out" label="Выйти" severity="secondary" text @click="logout" />
+        </div>
       </div>
 
       <div class="row">
@@ -84,6 +88,7 @@ export default {
     diagrams: { type: Array, default: () => [] },
     isLoadingList: { type: Boolean, required: true },
     zoom: { type: Number, required: true },
+    authUser: { type: Object, default: null },
     selectedConnection: { type: Object, default: null },
     selectedBendPoint: { type: Object, default: null },
     hasBendPoints: { type: Function, required: true },
@@ -102,6 +107,7 @@ export default {
     removeLastBendPoint: { type: Function, required: true },
     openRulesDialog: { type: Function, required: true },
     toggleTheme: { type: Function, required: true },
+    logout: { type: Function, required: true },
   },
   computed: {
     typeOptions() {
@@ -184,5 +190,19 @@ export default {
 
 .actions {
   align-items: center;
+}
+
+.auth-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: auto;
+  padding: 0.25rem 0.35rem 0.25rem 0.75rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--app-border, #d2dbe6);
+  color: var(--app-text, #0f172a);
+  font-size: 0.86rem;
+  font-weight: 600;
 }
 </style>

@@ -9,14 +9,14 @@ export class DiagramController {
         this.service = service;
     }
 
-    list = async (_req: Request, res: Response) => {
-        const items = await this.service.list();
+    list = async (req: Request, res: Response) => {
+        const items = await this.service.list(req.auth.userId!);
         res.json({items});
     };
 
     get = async (req: Request, res: Response) => {
         const {id} = req.params;
-        const found = await this.service.get(id);
+        const found = await this.service.get(req.auth.userId!, id);
         if (!found) return res.status(404).json({error: 'Diagram not found'});
         return res.json(found);
     };
@@ -24,7 +24,7 @@ export class DiagramController {
     create = async (req: Request, res: Response) => {
         const parsed = validateCreate(req.body);
         if (!parsed.ok) return res.status(400).json({error: parsed.error});
-        const result = await this.service.create(parsed.data);
+        const result = await this.service.create(req.auth.userId!, parsed.data);
         return res.status(201).json(result);
     };
 
@@ -32,14 +32,14 @@ export class DiagramController {
         const {id} = req.params;
         const parsed = validateUpdate(req.body);
         if (!parsed.ok) return res.status(400).json({error: parsed.error});
-        const updated = await this.service.update(id, parsed.data);
+        const updated = await this.service.update(req.auth.userId!, id, parsed.data);
         if (!updated) return res.status(404).json({error: 'Diagram not found'});
         return res.json(updated);
     };
 
     remove = async (req: Request, res: Response) => {
         const {id} = req.params;
-        const ok = await this.service.delete(id);
+        const ok = await this.service.delete(req.auth.userId!, id);
         if (!ok) return res.status(404).json({error: 'Diagram not found'});
         return res.status(200).json({success: true});
     };

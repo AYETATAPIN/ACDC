@@ -3,6 +3,7 @@ import { normalizeRulesMatrix } from './rules/connectionRules.js';
 import Dialog from 'primevue/dialog';
 import InputText from 'primevue/inputtext';
 import Button from 'primevue/button';
+import AuthGate from './components/AuthGate.vue';
 import DiagramHeader from './components/DiagramHeader.vue';
 import DiagramToolbar from './components/DiagramToolbar.vue';
 import DiagramPropertiesPanel from './components/DiagramPropertiesPanel.vue';
@@ -13,6 +14,7 @@ import { appMethods } from './app-methods.js';
 export default {
   name: 'App',
   components: {
+    AuthGate,
     DiagramHeader,
     DiagramToolbar,
     DiagramPropertiesPanel,
@@ -26,6 +28,16 @@ export default {
     return {
       lastSavedState: null,
       hasUnsavedChanges: false,
+      authReady: false,
+      authLoading: false,
+      authMode: 'login',
+      authUser: null,
+      authError: null,
+      authForm: {
+        email: '',
+        password: '',
+        display_name: '',
+      },
       themeMode: 'light',
       snapToGrid: true,
       gridSize: 10,
@@ -152,15 +164,14 @@ export default {
 
     }
   },
-  mounted() {
+  async mounted() {
     window.addEventListener('mousemove', this.handleGlobalMouseMove);
     window.addEventListener('mouseup', this.handleGlobalMouseUp);
     window.addEventListener('mouseleave', this.handleGlobalMouseUp);
     window.addEventListener('keydown', this.handleKeyDown);
     this.initTheme();
     this.pushLocalHistorySnapshot();
-    this.loadDiagramTypesCatalog();
-    this.loadDiagramsList();
+    await this.initializeAuth();
   },
 
   beforeUnmount() {
@@ -274,4 +285,3 @@ export default {
 
   methods: appMethods,
 }
-

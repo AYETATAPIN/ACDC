@@ -2,36 +2,46 @@
 import { DiagramConnection, DiagramConnectionCreateInput, DiagramConnectionUpdateInput, Point } from '../types.js';
 import { DiagramConnectionRepository } from '../repositories/diagramConnectionRepository.js';
 import { DiagramBlockRepository } from '../repositories/diagramBlockRepository.js';
+import { DiagramRepository } from '../repositories/diagramRepository.js';
 import { DiagramTypeService } from './diagramTypeService.js';
 import { DiagramHistoryService } from './diagramHistoryService.js';
+import { HttpError } from '../middleware/errorHandler.js';
 
 export class DiagramConnectionService {
   private repo: DiagramConnectionRepository;
   private blockRepo: DiagramBlockRepository;
+  private diagramRepo: DiagramRepository;
   private diagramTypeService: DiagramTypeService;
   private historyService: DiagramHistoryService;
 
   constructor(
     repo: DiagramConnectionRepository,
     blockRepo: DiagramBlockRepository,
+    diagramRepo: DiagramRepository,
     diagramTypeService: DiagramTypeService,
     historyService: DiagramHistoryService,
   ) {
     this.repo = repo;
     this.blockRepo = blockRepo;
+    this.diagramRepo = diagramRepo;
     this.diagramTypeService = diagramTypeService;
     this.historyService = historyService;
   }
 
-  async getByDiagramId(diagramId: string): Promise<DiagramConnection[]> {
-    return this.repo.getByDiagramId(diagramId);
+  async getByDiagramId(ownerUserId: string, diagramId: string): Promise<DiagramConnection[]> {
+    return this.repo.getByDiagramIdForOwner(diagramId, ownerUserId);
   }
 
-  async getById(id: string): Promise<DiagramConnection | null> {
-    return this.repo.getById(id);
+  async getById(ownerUserId: string, id: string): Promise<DiagramConnection | null> {
+    return this.repo.getByIdForOwner(id, ownerUserId);
   }
 
-  async create(input: DiagramConnectionCreateInput): Promise<{ id: string }> {
+  async create(ownerUserId: string, input: DiagramConnectionCreateInput): Promise<{ id: string }> {
+    const diagram = await this.diagramRepo.getByIdForOwner(input.diagram_id, ownerUserId);
+    if (!diagram) {
+      throw new HttpError(404, 'Diagram not found');
+    }
+
     const fromBlock = await this.blockRepo.getById(input.from_block_id);
     const toBlock = await this.blockRepo.getById(input.to_block_id);
 
@@ -48,8 +58,8 @@ export class DiagramConnectionService {
     return { id };
   }
 
-  async update(id: string, input: DiagramConnectionUpdateInput): Promise<DiagramConnection | null> {
-    const existing = await this.repo.getById(id);
+  async update(ownerUserId: string, id: string, input: DiagramConnectionUpdateInput): Promise<DiagramConnection | null> {
+    const existing = await this.repo.getByIdForOwner(id, ownerUserId);
     if (!existing) return null;
 
     const nextType = input.type ?? existing.type;
@@ -70,8 +80,8 @@ export class DiagramConnectionService {
     return updated;
   }
 
-  async delete(id: string): Promise<boolean> {
-    const existing = await this.repo.getById(id);
+  async delete(ownerUserId: string, id: string): Promise<boolean> {
+    const existing = await this.repo.getByIdForOwner(id, ownerUserId);
     if (!existing) return false;
 
     const ok = await this.repo.delete(id);
@@ -82,8 +92,8 @@ export class DiagramConnectionService {
     return ok;
   }
 
-  async addBendPoint(id: string, _position: string): Promise<DiagramConnection | null> {
-    const connection = await this.repo.getById(id);
+  async addBendPoint(ownerUserId: string, id: string, _position: string): Promise<DiagramConnection | null> {
+    const connection = await this.repo.getByIdForOwner(id, ownerUserId);
     if (!connection) return null;
 
     let points = connection.points as Point[];

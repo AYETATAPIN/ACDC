@@ -38,13 +38,32 @@ export class DiagramBlockRepository {
     this.pool = pool;
   }
 
-  async getByDiagramId(diagramId: string): Promise<DiagramBlock[]> {
-    const res = await this.pool.query('SELECT * FROM diagram_blocks WHERE diagram_id = $1 ORDER BY created_at', [diagramId]);
+  async getByDiagramIdForOwner(diagramId: string, ownerUserId: string): Promise<DiagramBlock[]> {
+    const res = await this.pool.query(
+      `SELECT b.*
+       FROM diagram_blocks b
+       JOIN diagrams d ON d.id = b.diagram_id
+       WHERE b.diagram_id = $1 AND d.owner_user_id = $2
+       ORDER BY b.created_at`,
+      [diagramId, ownerUserId],
+    );
     return res.rows.map(mapBlockRow);
   }
 
   async getById(id: string): Promise<DiagramBlock | null> {
     const res = await this.pool.query('SELECT * FROM diagram_blocks WHERE id = $1', [id]);
+    if (res.rows.length === 0) return null;
+    return mapBlockRow(res.rows[0]);
+  }
+
+  async getByIdForOwner(id: string, ownerUserId: string): Promise<DiagramBlock | null> {
+    const res = await this.pool.query(
+      `SELECT b.*
+       FROM diagram_blocks b
+       JOIN diagrams d ON d.id = b.diagram_id
+       WHERE b.id = $1 AND d.owner_user_id = $2`,
+      [id, ownerUserId],
+    );
     if (res.rows.length === 0) return null;
     return mapBlockRow(res.rows[0]);
   }

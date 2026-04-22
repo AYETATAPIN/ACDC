@@ -20,5 +20,10 @@ export const config = {
         database: process.env.DB_NAME || 'acdc',
         ssl: process.env.DB_SSL === 'true' ? {rejectUnauthorized: false} : undefined,
     },
+    auth: {
+        sessionCookieName: process.env.SESSION_COOKIE_NAME || 'acdc_session',
+        sessionTtlHours: parseIntEnv(process.env.SESSION_TTL_HOURS, 24 * 30),
+        passwordPepper: process.env.PASSWORD_PEPPER || '',
+    },
 
 } as const;

@@ -88,6 +88,15 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
 
+    `CREATE TABLE IF NOT EXISTS user_sessions (
+      id UUID PRIMARY KEY,
+      user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+
     `CREATE TABLE IF NOT EXISTS diagram_types (
       id UUID PRIMARY KEY,
       key TEXT UNIQUE,
@@ -212,6 +221,8 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
     `CREATE INDEX IF NOT EXISTS idx_connection_rules_diagram_type ON connection_rules(diagram_type_id)`,
     `CREATE INDEX IF NOT EXISTS idx_diagrams_diagram_type ON diagrams(diagram_type_id)`,
     `CREATE INDEX IF NOT EXISTS idx_share_tokens_diagram ON share_tokens(diagram_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)`,
   ];
 
   for (const sql of statements) {
@@ -374,4 +385,3 @@ export const initDb = async (): Promise<void> => {
   await runSchemaMigrations(p);
   await seedBuiltins(p);
 };
-

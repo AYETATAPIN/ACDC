@@ -51,6 +51,18 @@ export class DiagramConnectionRepository {
     this.pool = pool;
   }
 
+  async getByIdForOwner(id: string, ownerUserId: string): Promise<DiagramConnection | null> {
+    const res = await this.pool.query(
+      `SELECT c.*
+       FROM diagram_connections c
+       JOIN diagrams d ON d.id = c.diagram_id
+       WHERE c.id = $1 AND d.owner_user_id = $2`,
+      [id, ownerUserId],
+    );
+    if (res.rows.length === 0) return null;
+    return mapConnectionRow(res.rows[0]);
+  }
+
   async getById(id: string): Promise<DiagramConnection | null> {
     const res = await this.pool.query('SELECT * FROM diagram_connections WHERE id = $1', [id]);
     if (res.rows.length === 0) return null;
@@ -97,8 +109,15 @@ export class DiagramConnectionRepository {
     return mapConnectionRow(res.rows[0]);
   }
 
-  async getByDiagramId(diagramId: string): Promise<DiagramConnection[]> {
-    const res = await this.pool.query('SELECT * FROM diagram_connections WHERE diagram_id = $1 ORDER BY created_at', [diagramId]);
+  async getByDiagramIdForOwner(diagramId: string, ownerUserId: string): Promise<DiagramConnection[]> {
+    const res = await this.pool.query(
+      `SELECT c.*
+       FROM diagram_connections c
+       JOIN diagrams d ON d.id = c.diagram_id
+       WHERE c.diagram_id = $1 AND d.owner_user_id = $2
+       ORDER BY c.created_at`,
+      [diagramId, ownerUserId],
+    );
     return res.rows.map(mapConnectionRow);
   }
 

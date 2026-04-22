@@ -19,33 +19,39 @@ export class DiagramRepository {
     this.pool = pool;
   }
 
-  async list(): Promise<Diagram[]> {
+  async listForOwner(ownerUserId: string): Promise<Diagram[]> {
     const res = await this.pool.query(
-      'SELECT id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at FROM diagrams ORDER BY created_at DESC',
+      `SELECT id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at
+       FROM diagrams
+       WHERE owner_user_id = $1
+       ORDER BY created_at DESC`,
+      [ownerUserId],
     );
     return res.rows.map(mapRow);
   }
 
-  async getById(id: string): Promise<Diagram | null> {
+  async getByIdForOwner(id: string, ownerUserId: string): Promise<Diagram | null> {
     const res = await this.pool.query(
-      'SELECT id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at FROM diagrams WHERE id = $1',
-      [id],
+      `SELECT id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at
+       FROM diagrams
+       WHERE id = $1 AND owner_user_id = $2`,
+      [id, ownerUserId],
     );
     if (res.rows.length === 0) return null;
     return mapRow(res.rows[0]);
   }
 
-  async create(id: string, input: DiagramCreateInput): Promise<Diagram> {
+  async create(id: string, ownerUserId: string, input: DiagramCreateInput): Promise<Diagram> {
     const res = await this.pool.query(
       `INSERT INTO diagrams (id, name, type, diagram_type_id, owner_user_id, svg_data)
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at`,
-      [id, input.name, input.type, input.diagram_type_id, null, input.svg_data],
+      [id, input.name, input.type, input.diagram_type_id, ownerUserId, input.svg_data],
     );
     return mapRow(res.rows[0]);
   }
 
-  async update(id: string, input: DiagramUpdateInput): Promise<Diagram | null> {
+  async updateForOwner(id: string, ownerUserId: string, input: DiagramUpdateInput): Promise<Diagram | null> {
     const fields: string[] = [];
     const values: any[] = [];
     let idx = 1;
@@ -72,17 +78,23 @@ export class DiagramRepository {
     const query = `UPDATE diagrams
                    SET ${fields.join(', ')},
                        updated_at = NOW()
-                   WHERE id = $${idx}
+                   WHERE id = $${idx} AND owner_user_id = $${idx + 1}
                    RETURNING id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at`;
 
     values.push(id);
+    values.push(ownerUserId);
     const res = await this.pool.query(query, values);
     if (res.rows.length === 0) return null;
     return mapRow(res.rows[0]);
   }
 
-  async delete(id: string): Promise<boolean> {
-    const res = await this.pool.query('DELETE FROM diagrams WHERE id = $1 RETURNING id', [id]);
+  async deleteForOwner(id: string, ownerUserId: string): Promise<boolean> {
+    const res = await this.pool.query('DELETE FROM diagrams WHERE id = $1 AND owner_user_id = $2 RETURNING id', [id, ownerUserId]);
+    return res.rows.length > 0;
+  }
+
+  async isOwnedByUser(id: string, ownerUserId: string): Promise<boolean> {
+    const res = await this.pool.query('SELECT 1 FROM diagrams WHERE id = $1 AND owner_user_id = $2 LIMIT 1', [id, ownerUserId]);
     return res.rows.length > 0;
   }
 }

@@ -1,5 +1,21 @@
 ﻿<template>
   <div class="app">
+    <div v-if="!authReady" class="auth-loading-screen">
+      <div class="auth-loading-card">Restoring session...</div>
+    </div>
+
+    <AuthGate
+      v-else-if="!authUser"
+      :auth-mode="authMode"
+      :auth-form="authForm"
+      :auth-loading="authLoading"
+      :auth-error="authError"
+      :set-auth-mode="setAuthMode"
+      :update-auth-field="updateAuthField"
+      :submit-auth-form="submitAuthForm"
+    />
+
+    <template v-else>
     <DiagramHeader
       :diagram-name="diagramName"
       :diagram-type="diagramType"
@@ -14,6 +30,7 @@
       :diagrams="diagrams"
       :is-loading-list="isLoadingList"
       :zoom="zoom"
+      :auth-user="authUser"
       :selected-connection="selectedConnection"
       :selected-bend-point="selectedBendPoint"
       :has-bend-points="hasBendPoints"
@@ -32,6 +49,7 @@
       :remove-last-bend-point="removeLastBendPoint"
       :open-rules-dialog="openRulesDialog"
       :toggle-theme="toggleTheme"
+      :logout="logout"
     />
 
     <DiagramRulesTypesDialog
@@ -480,11 +498,11 @@
         <Button label="Сохранить" icon="pi pi-check" @click="saveBendPointDialog" />
       </template>
     </Dialog>
+    </template>
   </div>
 </template>
 
 <script src="./app-options.js"></script>
 
 <style src="./styles/app.css"></style>
-
 

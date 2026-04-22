@@ -25,6 +25,12 @@ export interface AuthContext {
   isAuthenticated: boolean;
 }
 
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+  display_name?: string | null;
+}
+
 export interface AccessPolicy {
   canRead: boolean;
   canWrite: boolean;
@@ -160,6 +166,15 @@ export interface ShareToken {
   expires_at?: string | null;
   created_by_user_id?: string | null;
   created_at: string;
+}
+
+export interface UserSession {
+  id: string;
+  user_id: string;
+  token_hash: string;
+  expires_at: string;
+  created_at: string;
+  last_used_at: string;
 }
 
 export interface DiagramTypeEntity {

@@ -81,13 +81,28 @@ export class DiagramTypeRepository {
     this.pool = pool;
   }
 
-  async list(): Promise<DiagramTypeEntity[]> {
-    const res = await this.pool.query('SELECT * FROM diagram_types ORDER BY is_builtin DESC, created_at ASC');
+  async listAccessibleToUser(userId: string): Promise<DiagramTypeEntity[]> {
+    const res = await this.pool.query(
+      `SELECT *
+       FROM diagram_types
+       WHERE is_builtin = TRUE OR owner_user_id = $1
+       ORDER BY is_builtin DESC, created_at ASC`,
+      [userId],
+    );
     return res.rows.map(mapDiagramTypeRow);
   }
 
   async getById(id: string): Promise<DiagramTypeEntity | null> {
     const res = await this.pool.query('SELECT * FROM diagram_types WHERE id = $1', [id]);
+    if (res.rows.length === 0) return null;
+    return mapDiagramTypeRow(res.rows[0]);
+  }
+
+  async getAccessibleById(id: string, userId: string): Promise<DiagramTypeEntity | null> {
+    const res = await this.pool.query(
+      'SELECT * FROM diagram_types WHERE id = $1 AND (is_builtin = TRUE OR owner_user_id = $2)',
+      [id, userId],
+    );
     if (res.rows.length === 0) return null;
     return mapDiagramTypeRow(res.rows[0]);
   }
@@ -158,7 +173,7 @@ export class DiagramTypeRepository {
     return res.rows.length > 0;
   }
 
-  async clone(diagramTypeId: string, name: string): Promise<DiagramTypeEntity | null> {
+  async clone(diagramTypeId: string, name: string, ownerUserId: string): Promise<DiagramTypeEntity | null> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -182,7 +197,7 @@ export class DiagramTypeRepository {
           sourceType.description,
           sourceType.is_free_mode,
           sourceType.id,
-          sourceType.owner_user_id,
+          ownerUserId,
           JSON.stringify({ ...(parseJson<Record<string, any>>(sourceType.metadata, {})), clonedFrom: sourceType.id }),
         ],
       );
@@ -265,6 +280,11 @@ export class DiagramTypeRepository {
   async listElements(diagramTypeId: string): Promise<ElementTypeEntity[]> {
     const res = await this.pool.query('SELECT * FROM element_types WHERE diagram_type_id = $1 ORDER BY is_builtin DESC, created_at ASC', [diagramTypeId]);
     return res.rows.map(mapElementTypeRow);
+  }
+
+  async getElementById(id: string): Promise<ElementTypeEntity | null> {
+    const res = await this.pool.query('SELECT * FROM element_types WHERE id = $1', [id]);
+    return res.rows[0] ? mapElementTypeRow(res.rows[0]) : null;
   }
 
   async createElement(diagramTypeId: string, input: ElementTypeCreateInput): Promise<ElementTypeEntity> {
@@ -352,6 +372,11 @@ export class DiagramTypeRepository {
       [diagramTypeId],
     );
     return res.rows.map(mapConnectionTypeRow);
+  }
+
+  async getConnectionTypeById(id: string): Promise<ConnectionTypeEntity | null> {
+    const res = await this.pool.query('SELECT * FROM connection_types WHERE id = $1', [id]);
+    return res.rows[0] ? mapConnectionTypeRow(res.rows[0]) : null;
   }
 
   async createConnectionType(diagramTypeId: string, input: ConnectionTypeCreateInput): Promise<ConnectionTypeEntity> {

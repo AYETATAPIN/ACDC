@@ -83,6 +83,7 @@ getElementPreset(type) {
             textColor: found.default_style?.textColor || '#ffffff',
             width: Number(found.default_size?.width) || 120,
             height: Number(found.default_size?.height) || 60,
+            svg_path: typeof found.svg_path === 'string' ? found.svg_path : '',
             element_type_id: found.id,
             field_schema: Array.isArray(found.field_schema) ? found.field_schema : [],
           };
@@ -105,6 +106,17 @@ getElementPreset(type) {
         left: `${(x * 100).toFixed(1)}%`,
         top: `${(y * 100).toFixed(1)}%`,
       };
+    },
+
+    getElementFieldDisplayValue(element, field, idx = 0) {
+      const fallback = field?.label || field?.key || `field_${idx + 1}`;
+      const key = typeof field?.key === 'string' ? field.key.trim() : '';
+      if (!key || !element || typeof element !== 'object') return fallback;
+      const props = element.properties && typeof element.properties === 'object' ? element.properties : {};
+      const value = props[key];
+      if (value === undefined || value === null || value === '') return fallback;
+      if (typeof value === 'boolean') return `${fallback}: ${value ? 'yes' : 'no'}`;
+      return String(value);
     },
 
     isConnectionTool(tool) {
@@ -181,6 +193,11 @@ getElementStyle(element) {
           style.background = 'transparent';
           style.border = 'none';
           style.boxShadow = 'none';
+      }
+      if (shape === 'custom') {
+        style.background = 'transparent';
+        style.border = 'none';
+        style.boxShadow = 'none';
       }
       if (shape === 'ellipse') {
         style.borderRadius = '50%';

@@ -377,6 +377,33 @@
                       <div class="diamond-type">{{ element.type }}</div>
                   </div>
               </template>
+              <template v-else-if="getElementShape(element.type) === 'custom'">
+                  <svg
+                    v-if="(getElementPreset(element.type)?.svg_path || '').trim()"
+                    class="custom-shape-svg"
+                    viewBox="0 0 100 100"
+                    preserveAspectRatio="none"
+                  >
+                    <path
+                      :d="getElementPreset(element.type)?.svg_path || ''"
+                      :fill="element.customColor || getElementPreset(element.type)?.color || '#3498db'"
+                      :stroke="element.customBorder || getElementPreset(element.type)?.border || '#2d83be'"
+                      stroke-width="2"
+                    />
+                  </svg>
+                  <div class="element-text-main" :style="{ fontSize: (element.fontSize || 14) + 'px' }">
+                      {{ element.text || getDefaultText(element.type) }}
+                  </div>
+                  <div
+                    v-for="(field, idx) in getElementVisibleFields(element)"
+                    :key="`field-${element.id}-${idx}`"
+                    class="element-field-label"
+                    :style="getElementFieldStyle(field)"
+                  >
+                    {{ getElementFieldDisplayValue(element, field, idx) }}
+                  </div>
+                  <div class="element-type-tag">{{ element.type }}</div>
+              </template>
               <template v-else-if="element.type === 'actor'">
                   <div class="actor-container">
                       <!-- Р“РѕР»РѕРІР° -->
@@ -452,7 +479,7 @@
                     class="element-field-label"
                     :style="getElementFieldStyle(field)"
                   >
-                    {{ field.label || field.key || `field_${idx + 1}` }}
+                    {{ getElementFieldDisplayValue(element, field, idx) }}
                   </div>
                   <div class="element-type-tag">{{ element.type }}</div>
               </template>

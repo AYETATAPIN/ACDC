@@ -482,6 +482,20 @@
   z-index: 2;
 }
 
+.element.shape-custom {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.custom-shape-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .shape-ellipse .element-type-tag {
   margin-top: 2px;
 }

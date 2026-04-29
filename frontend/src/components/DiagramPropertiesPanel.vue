@@ -21,6 +21,52 @@
         <InputText v-model="selectedElement.text" />
       </div>
 
+      <div class="field field-group" v-if="elementFieldSchema.length">
+        <label>Поля элемента</label>
+        <div class="custom-fields">
+          <div class="custom-field-item" v-for="(field, idx) in elementFieldSchema" :key="`field-editor-${idx}-${field.key || 'no_key'}`">
+            <small class="custom-field-label">{{ field.label || field.key || `field_${idx + 1}` }}</small>
+
+            <InputText
+              v-if="resolveFieldType(field) === 'text'"
+              :modelValue="getFieldValue(field)"
+              @update:modelValue="setFieldValue(field, $event)"
+            />
+
+            <InputNumber
+              v-else-if="resolveFieldType(field) === 'number'"
+              :modelValue="toNumberValue(getFieldValue(field))"
+              :useGrouping="false"
+              @update:modelValue="setFieldValue(field, $event)"
+            />
+
+            <Dropdown
+              v-else-if="resolveFieldType(field) === 'select'"
+              :modelValue="getFieldValue(field)"
+              :options="getSelectOptions(field)"
+              optionLabel="label"
+              optionValue="value"
+              placeholder="Выберите значение"
+              @update:modelValue="setFieldValue(field, $event)"
+            />
+
+            <div v-else-if="resolveFieldType(field) === 'checkbox'" class="row checkbox-row">
+              <InputSwitch
+                :modelValue="Boolean(getFieldValue(field))"
+                @update:modelValue="setFieldValue(field, $event)"
+              />
+              <span class="checkbox-value">{{ Boolean(getFieldValue(field)) ? 'Да' : 'Нет' }}</span>
+            </div>
+
+            <InputText
+              v-else
+              :modelValue="getFieldValue(field)"
+              @update:modelValue="setFieldValue(field, $event)"
+            />
+          </div>
+        </div>
+      </div>
+
       <div class="field">
         <label>Размер шрифта</label>
         <div class="row slider-row">
@@ -121,10 +167,12 @@ import Tag from 'primevue/tag';
 import Dropdown from 'primevue/dropdown';
 import Textarea from 'primevue/textarea';
 import ColorPicker from 'primevue/colorpicker';
+import InputNumber from 'primevue/inputnumber';
+import InputSwitch from 'primevue/inputswitch';
 
 export default {
   name: 'DiagramPropertiesPanel',
-  components: { Button, InputText, Slider, Tag, Dropdown, Textarea, ColorPicker },
+  components: { Button, InputText, Slider, Tag, Dropdown, Textarea, ColorPicker, InputNumber, InputSwitch },
   props: {
     selectedElement: { type: Object, default: null },
     selectedConnection: { type: Object, default: null },
@@ -151,6 +199,14 @@ export default {
       ],
     };
   },
+  computed: {
+    elementFieldSchema() {
+      const preset = this.selectedElement ? this.getElementPreset(this.selectedElement.type) : null;
+      const schema = preset?.field_schema;
+      if (!Array.isArray(schema)) return [];
+      return schema.filter((field) => field && typeof field.key === 'string' && field.key.trim() !== '');
+    },
+  },
   watch: {
     selectedElement: {
       immediate: true,
@@ -159,6 +215,7 @@ export default {
           this.classAttributes = (newElement.properties?.attributes || []).join('\n');
           this.classOperations = (newElement.properties?.operations || []).join('\n');
         }
+        this.syncFieldDefaults(newElement);
       },
     },
   },
@@ -174,6 +231,82 @@ export default {
         attributes: this.classAttributes.split('\n').filter((line) => line.trim() !== ''),
         operations: this.classOperations.split('\n').filter((line) => line.trim() !== ''),
       };
+    },
+    resolveFieldType(field) {
+      const t = String(field?.type || 'text').toLowerCase();
+      return ['text', 'number', 'select', 'checkbox'].includes(t) ? t : 'text';
+    },
+    resolveFieldDefault(field) {
+      const type = this.resolveFieldType(field);
+      if (type === 'checkbox') return Boolean(field?.default);
+      if (type === 'number') {
+        const n = Number(field?.default);
+        return Number.isFinite(n) ? n : null;
+      }
+      if (field?.default === undefined || field?.default === null) return '';
+      return String(field.default);
+    },
+    ensureElementProperties() {
+      if (!this.selectedElement) return;
+      if (!this.selectedElement.properties || typeof this.selectedElement.properties !== 'object') {
+        this.selectedElement.properties = {};
+      }
+    },
+    syncFieldDefaults(element = this.selectedElement) {
+      if (!element) return;
+      if (!element.properties || typeof element.properties !== 'object') {
+        element.properties = {};
+      }
+      for (const field of this.elementFieldSchema) {
+        const key = String(field?.key || '').trim();
+        if (!key) continue;
+        if (element.properties[key] === undefined) {
+          element.properties[key] = this.resolveFieldDefault(field);
+        }
+      }
+    },
+    getFieldValue(field) {
+      this.ensureElementProperties();
+      const key = String(field?.key || '').trim();
+      if (!key || !this.selectedElement) return this.resolveFieldDefault(field);
+      if (this.selectedElement.properties[key] === undefined) {
+        this.selectedElement.properties[key] = this.resolveFieldDefault(field);
+      }
+      return this.selectedElement.properties[key];
+    },
+    setFieldValue(field, value) {
+      this.ensureElementProperties();
+      const key = String(field?.key || '').trim();
+      if (!key || !this.selectedElement) return;
+      const type = this.resolveFieldType(field);
+      if (type === 'number') {
+        const normalized = value === null || value === undefined || value === '' ? null : Number(value);
+        this.selectedElement.properties[key] = Number.isFinite(normalized) ? normalized : null;
+        return;
+      }
+      if (type === 'checkbox') {
+        this.selectedElement.properties[key] = Boolean(value);
+        return;
+      }
+      this.selectedElement.properties[key] = value ?? '';
+    },
+    getSelectOptions(field) {
+      const raw = Array.isArray(field?.options) ? field.options : [];
+      return raw
+        .map((opt) => {
+          if (typeof opt === 'string') return { label: opt, value: opt };
+          if (opt && typeof opt === 'object') {
+            const value = opt.value ?? opt.label;
+            const label = opt.label ?? opt.value;
+            return { label: String(label ?? ''), value: value ?? '' };
+          }
+          return { label: String(opt ?? ''), value: String(opt ?? '') };
+        })
+        .filter((opt) => String(opt.value ?? '').trim() !== '');
+    },
+    toNumberValue(value) {
+      const n = Number(value);
+      return Number.isFinite(n) ? n : null;
     },
   },
 };
@@ -248,6 +381,41 @@ export default {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+}
+
+.field-group {
+  gap: 0.45rem;
+}
+
+.custom-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.custom-field-item {
+  padding: 0.45rem;
+  border-radius: 8px;
+  border: 1px solid var(--app-border, #dbe7ef);
+  background: var(--app-panel-soft, #f8fbff);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.custom-field-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--app-muted, #334155);
+}
+
+.checkbox-row {
+  justify-content: space-between;
+}
+
+.checkbox-value {
+  font-size: 0.8rem;
+  color: var(--app-muted, #334155);
 }
 
 .panel :deep(.p-inputtext),

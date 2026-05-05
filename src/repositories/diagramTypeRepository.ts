@@ -189,10 +189,11 @@ export class DiagramTypeRepository {
       const clonedTypeRes = await client.query(
         `INSERT INTO diagram_types (
           id, key, name, description, is_builtin, is_free_mode, clone_source_id, owner_user_id, metadata
-        ) VALUES ($1, NULL, $2, $3, FALSE, $4, $5, $6, $7)
+        ) VALUES ($1, $2, $3, $4, FALSE, $5, $6, $7, $8)
         RETURNING *`,
         [
           clonedId,
+          `type_${uuidv4()}`,
           name,
           sourceType.description,
           sourceType.is_free_mode,
@@ -492,7 +493,7 @@ export class DiagramTypeRepository {
           to_element_type_id: to.id,
           rules: connectionTypes.map((ct) => ({
             connection_type_id: ct.id,
-            allowed: connMap.get(ct.id) ?? false,
+            allowed: connMap.get(ct.id) ?? true,
           })),
         });
       }
@@ -610,7 +611,7 @@ export class DiagramTypeRepository {
       [diagramTypeId, ids.from_id, ids.to_id, ids.connection_id],
     );
 
-    return Boolean(ruleRes.rows[0]?.allowed);
+    return ruleRes.rows.length === 0 ? true : Boolean(ruleRes.rows[0]?.allowed);
   }
 
   async getDiagramTypeIdForDiagram(diagramId: string): Promise<string | null> {
@@ -623,7 +624,7 @@ export class DiagramTypeRepository {
       `UPDATE diagram_connections c
        SET rule_violation = CASE
          WHEN dt.is_free_mode THEN FALSE
-         ELSE NOT COALESCE(r.allowed, FALSE)
+         ELSE NOT COALESCE(r.allowed, TRUE)
        END
        FROM diagram_connections cx
        JOIN diagrams d ON d.id = cx.diagram_id
@@ -649,7 +650,7 @@ export class DiagramTypeRepository {
       `UPDATE diagram_connections c
        SET rule_violation = CASE
          WHEN dt.is_free_mode THEN FALSE
-         ELSE NOT COALESCE(r.allowed, FALSE)
+         ELSE NOT COALESCE(r.allowed, TRUE)
        END
        FROM diagram_connections cx
        JOIN diagrams d ON d.id = cx.diagram_id

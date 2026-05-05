@@ -77,6 +77,12 @@ setElements(nextElements) {
         const updated = nextElements.find(el => el.id === this.selectedElement.id);
         this.selectedElement = updated || null;
       }
+      if (Array.isArray(this.selectedElements) && this.selectedElements.length > 0) {
+        const byId = new Map(nextElements.map((el) => [el.id, el]));
+        this.selectedElements = this.selectedElements
+          .map((item) => byId.get(item?.id))
+          .filter(Boolean);
+      }
       this.queueLocalHistorySnapshot();
     },
 

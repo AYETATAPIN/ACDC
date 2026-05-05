@@ -93,7 +93,7 @@
         />
       </div>
 
-      <Tag severity="info" :value="`Тип: ${selectedElement.type}`" />
+      <Tag severity="info" :value="`Тип: ${getElementDisplayType(selectedElement)}`" />
     </div>
 
     <div class="content" v-else-if="selectedConnection">
@@ -154,7 +154,7 @@
         <Button icon="pi pi-times" label="Удалить связь" size="small" severity="danger" @click="deleteConnection(selectedConnection)" />
       </div>
 
-      <Tag :severity="selectedConnection.rule_violation ? 'warning' : 'info'" :value="selectedConnection.rule_violation ? 'Нарушение правила' : `Тип: ${selectedConnection.type}`" />
+      <Tag :severity="selectedConnection.rule_violation ? 'warning' : 'info'" :value="selectedConnection.rule_violation ? 'Нарушение правила' : `Тип: ${toReadableType(selectedConnection.type)}`" />
     </div>
   </aside>
 </template>
@@ -307,6 +307,19 @@ export default {
     toNumberValue(value) {
       const n = Number(value);
       return Number.isFinite(n) ? n : null;
+    },
+    toReadableType(value) {
+      const raw = String(value || '').trim();
+      if (!raw) return 'Element';
+      return raw
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/\b\w/g, (ch) => ch.toUpperCase());
+    },
+    getElementDisplayType(element) {
+      const preset = this.getElementPreset(element?.type);
+      if (preset?.label && String(preset.label).trim()) return String(preset.label).trim();
+      return this.toReadableType(element?.type);
     },
   },
 };

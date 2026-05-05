@@ -314,7 +314,7 @@ applySnapshot(snapshot) {
             y: Number(block.y),
             width: Number(block.width),
             height: Number(block.height),
-            text: props.text || props.label || block.type,
+            text: props.text || props.label || this.getDefaultText(block.type, this.getElementPreset(block.type)),
             fontSize: Number(props.fontSize) || 14,
             customColor: props.customColor ?? null,
             customBorder: props.customBorder ?? null,
@@ -424,7 +424,7 @@ computeInitialElementSize(type, preset, text, fieldSchema) {
 createElement(type, x, y) {
         const preset = this.getElementPreset(type);
         const fieldDefaults = this.buildDefaultFieldValues(preset?.field_schema);
-        const defaultText = this.getDefaultText(type);
+        const defaultText = this.getDefaultText(type, preset);
         const size = this.computeInitialElementSize(type, preset, defaultText, preset?.field_schema);
         const element = {
             id: this.generateUUID(),
@@ -465,7 +465,10 @@ generateUUID() {
       });
     },
 
-getDefaultText(type) {
+getDefaultText(type, preset = null) {
+      if (preset?.label && String(preset.label).trim()) {
+        return String(preset.label).trim();
+      }
       const texts = {
         // Р‘РµР· РєР°РІС‹С‡РµРє (РІР°Р»РёРґРЅС‹Рµ РёРґРµРЅС‚РёС„РёРєР°С‚РѕСЂС‹)
         class: 'New Class',
@@ -504,6 +507,12 @@ getDefaultText(type) {
         'object_flow': 'Object Flow',
       };
 
-      return texts[type] || type;
+      if (texts[type]) return texts[type];
+      const raw = String(type || '').trim();
+      if (!raw) return 'Element';
+      return raw
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/\b\w/g, (ch) => ch.toUpperCase());
     },
 };

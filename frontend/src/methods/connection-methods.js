@@ -2,6 +2,7 @@ import { findBestSegmentIndex, toggleBendPointPoints } from '../utils/bendPoints
 import { diagramsService, diagramTypesService, ApiError } from '../services/index.js';
 import { isConnectionAllowedByMatrix, normalizeRulesMatrix } from '../rules/connectionRules.js';
 import { BUILTIN_DIAGRAM_TYPE_IDS } from '../app-constants.js';
+import { getCustomShapeBoundaryTowards, getCustomShapeNearestBoundary, parseCustomShapeData } from '../utils/customShape.js';
 
 export const connectionMethods = {
 deleteConnection(connection) {
@@ -95,11 +96,13 @@ isStructuralElement(element) {
 resolveElementTypeId(element) {
       if (!element) return null;
       if (element.element_type_id) return element.element_type_id;
-      return this.customElementTypes.find((item) => item.key === element.type)?.id || null;
+      const presetId = this.getElementPreset(element.type)?.element_type_id;
+      if (presetId) return presetId;
+      return this.customElementTypes.find((item) => item.key === element.type || item.name === element.type)?.id || null;
     },
 
 resolveConnectionTypeId(connectionType) {
-      return this.customConnectionTypes.find((item) => item.key === connectionType)?.id || null;
+      return this.customConnectionTypes.find((item) => item.key === connectionType || item.name === connectionType)?.id || null;
     },
 
 isConnectionAllowed(fromElement, toElement, connectionType) {
@@ -111,7 +114,7 @@ isConnectionAllowed(fromElement, toElement, connectionType) {
         const toElementTypeId = this.resolveElementTypeId(toElement);
         const connectionTypeId = this.resolveConnectionTypeId(connectionType);
 
-        if (!fromElementTypeId || !toElementTypeId || !connectionTypeId) return false;
+        if (!fromElementTypeId || !toElementTypeId || !connectionTypeId) return true;
 
         return isConnectionAllowedByMatrix({
           matrix: this.rulesMatrix,
@@ -378,6 +381,20 @@ projectPointToElementPerimeter(element, point) {
       const y = Number(element.y) || 0;
       const width = Math.max(1, Number(element.width) || 1);
       const height = Math.max(1, Number(element.height) || 1);
+      const shape = this.getElementShape(element.type);
+
+      if (shape === 'custom') {
+        const raw = this.getElementPreset(element.type)?.svg_path || '';
+        const xRatio = (point.x - x) / width;
+        const yRatio = (point.y - y) / height;
+        const nearest = getCustomShapeNearestBoundary(raw, xRatio, yRatio);
+        return {
+          kind: 'custom',
+          xRatio: nearest.xRatio,
+          yRatio: nearest.yRatio,
+        };
+      }
+
       const localX = Math.min(width, Math.max(0, point.x - x));
       const localY = Math.min(height, Math.max(0, point.y - y));
       const dxLeft = Math.abs(localX);
@@ -396,6 +413,16 @@ getPointFromAnchor(element, anchor) {
       const y = Number(element.y) || 0;
       const width = Math.max(1, Number(element.width) || 1);
       const height = Math.max(1, Number(element.height) || 1);
+
+      if (anchor?.kind === 'custom') {
+        const xRatio = Math.max(0, Math.min(1, Number(anchor.xRatio) || 0.5));
+        const yRatio = Math.max(0, Math.min(1, Number(anchor.yRatio) || 0.5));
+        return {
+          x: x + width * xRatio,
+          y: y + height * yRatio,
+        };
+      }
+
       if (!anchor || !anchor.side) {
         return { x: x + width / 2, y: y + height / 2 };
       }
@@ -625,6 +652,20 @@ getAnchorPoint(element, target) {
       }
 
       const shape = this.getElementShape(element.type);
+
+      if (shape === 'custom') {
+        const raw = this.getElementPreset(element.type)?.svg_path || '';
+        const parsed = parseCustomShapeData(raw);
+        if (parsed.d) {
+          const localDirectionX = dx * (parsed.viewBoxData.width / Math.max(1, width));
+          const localDirectionY = dy * (parsed.viewBoxData.height / Math.max(1, height));
+          const hit = getCustomShapeBoundaryTowards(raw, localDirectionX, localDirectionY);
+          return {
+            x: Number(element.x) + Math.max(0, Math.min(1, hit.xRatio)) * width,
+            y: Number(element.y) + Math.max(0, Math.min(1, hit.yRatio)) * height,
+          };
+        }
+      }
 
       if (shape === 'ellipse') {
         const a = width / 2;

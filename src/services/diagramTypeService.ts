@@ -13,6 +13,7 @@ import type {
   ElementTypeEntity,
   ElementTypeUpdateInput,
 } from '../types.js';
+import { v4 as uuidv4 } from 'uuid';
 import { ConnectionRuleViolationError } from '../errors/connectionRuleViolationError.js';
 import { HttpError } from '../middleware/errorHandler.js';
 
@@ -21,6 +22,14 @@ export class DiagramTypeService {
 
   constructor(repo: DiagramTypeRepository) {
     this.repo = repo;
+  }
+
+  private normalizeAutoKey(value: unknown, prefix: string): string {
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (trimmed) return trimmed;
+    }
+    return `${prefix}_${uuidv4()}`;
   }
 
   private ensureReadable(type: DiagramTypeEntity | null, userId: string): DiagramTypeEntity | null {
@@ -51,6 +60,7 @@ export class DiagramTypeService {
   async create(userId: string, input: DiagramTypeCreateInput): Promise<DiagramTypeEntity> {
     return this.repo.create({
       ...input,
+      key: this.normalizeAutoKey(input.key, 'type'),
       is_builtin: false,
       owner_user_id: userId,
     });
@@ -85,6 +95,7 @@ export class DiagramTypeService {
     if (!type) throw new HttpError(404, 'Diagram type not found');
     const created = await this.repo.createElement(diagramTypeId, {
       ...input,
+      key: this.normalizeAutoKey(input.key, 'element'),
       is_builtin: false,
     });
     await this.repo.recalculateRuleViolationsByDiagramType(diagramTypeId);
@@ -126,6 +137,7 @@ export class DiagramTypeService {
     if (!type) throw new HttpError(404, 'Diagram type not found');
     const created = await this.repo.createConnectionType(diagramTypeId, {
       ...input,
+      key: this.normalizeAutoKey(input.key, 'connection'),
       is_builtin: false,
     });
     await this.repo.recalculateRuleViolationsByDiagramType(diagramTypeId);

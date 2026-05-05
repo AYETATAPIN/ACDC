@@ -246,6 +246,7 @@ export default {
           diagrams: [this.diagramType],
           width: Number(item.default_size?.width) || 120,
           height: Number(item.default_size?.height) || 60,
+          svg_path: typeof item.svg_path === 'string' ? item.svg_path : '',
           color: item.default_style?.color || '#3498db',
           border: item.default_style?.border || '#2d83be',
           textColor: item.default_style?.textColor || '#ffffff',

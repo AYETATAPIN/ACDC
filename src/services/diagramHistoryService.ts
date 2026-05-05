@@ -192,12 +192,19 @@ export class DiagramHistoryService {
   }
 
   async getCurrentState(ownerUserId: string, diagramId: string): Promise<CurrentStateResult> {
+    return this.getStateAtVersion(ownerUserId, diagramId, undefined);
+  }
+
+  async getStateAtVersion(ownerUserId: string, diagramId: string, requestedVersion?: number): Promise<CurrentStateResult> {
     const client = await this.pool.connect();
     try {
       const diagramRow = await this.getDiagramRow(client, diagramId, ownerUserId);
       if (!diagramRow) return { status: 'not_found' };
 
-      const version = diagramRow.current_version ?? 0;
+      const currentVersion = diagramRow.current_version ?? 0;
+      const version = Number.isFinite(Number(requestedVersion)) && Number(requestedVersion) > 0
+        ? Number(requestedVersion)
+        : currentVersion;
       if (version === 0) return { status: 'no_history' };
 
       const snapshot = await this.getSnapshot(client, diagramId, version);

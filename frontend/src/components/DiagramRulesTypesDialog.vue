@@ -25,6 +25,10 @@
 
     <Message v-if="errorMessage" severity="error" :closable="false">{{ errorMessage }}</Message>
     <Message v-if="successMessage" severity="success" :closable="false">{{ successMessage }}</Message>
+    <Message v-if="selectedType?.is_builtin" severity="warn" :closable="false">
+      Built-in types are read-only. Clone this type to customize elements, connections, and rules.
+      <Button text icon="pi pi-copy" label="Clone for editing" style="margin-left: 0.5rem" @click="quickCloneSelectedType" />
+    </Message>
 
     <TabView>
       <TabPanel header="Diagram Type">
@@ -60,16 +64,16 @@
             <h4>Current Type</h4>
             <div class="form">
               <label>Name</label>
-              <InputText v-model="typeEditForm.name" />
+              <InputText v-model="typeEditForm.name" :disabled="selectedType.is_builtin" />
               <label>Key</label>
               <InputText v-model="typeEditForm.key" :disabled="selectedType.is_builtin" />
               <label>Description</label>
-              <InputText v-model="typeEditForm.description" />
+              <InputText v-model="typeEditForm.description" :disabled="selectedType.is_builtin" />
               <label>Free Mode</label>
-              <InputSwitch v-model="typeEditForm.is_free_mode" />
+              <InputSwitch v-model="typeEditForm.is_free_mode" :disabled="selectedType.is_builtin" />
             </div>
             <div class="actions">
-              <Button label="Save" icon="pi pi-save" @click="updateType" />
+              <Button label="Save" icon="pi pi-save" :disabled="selectedType.is_builtin" @click="updateType" />
               <Button v-if="!selectedType.is_builtin" label="Delete" icon="pi pi-trash" severity="danger" outlined @click="deleteType" />
             </div>
           </section>
@@ -99,6 +103,9 @@
 
           <section class="card">
             <h4>Element Actions</h4>
+            <small class="muted">
+              Key is the internal id, Ports are optional fixed connection points, Fields are configurable labels/inputs on the block.
+            </small>
             <div class="actions">
               <Button label="Create Element" icon="pi pi-plus" :disabled="!canMutate" @click="openCreateElementDialog" />
               <Button label="Edit Selected" icon="pi pi-pencil" severity="secondary" :disabled="!selectedElementType || !canMutate" @click="openEditElementDialog" />
@@ -108,6 +115,9 @@
               <label>Quick Preview</label>
               <div class="preview-canvas">
                 <div class="preview-element" :style="previewElementStyle">
+                  <svg v-if="previewSvgPath" class="preview-custom-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <path :d="previewSvgPath" :fill="elementForm.color || '#3498db'" :stroke="elementForm.border || '#2d83be'" stroke-width="2" />
+                  </svg>
                   <div class="preview-title">{{ elementForm.name || 'New Element' }}</div>
                   <div
                     v-for="item in previewVisibleFields"
@@ -208,8 +218,8 @@
       modal
       :draggable="false"
       :header="elementEditor.mode === 'edit' ? 'Edit Element' : 'Create Element'"
-      :style="{ width: '98vw', maxWidth: '1880px' }"
-      :contentStyle="{ maxHeight: '88vh' }"
+      :style="{ width: '99vw', maxWidth: 'none' }"
+      :contentStyle="{ maxHeight: '92vh' }"
       class="rules-dialog element-editor-dialog"
     >
       <div class="editor-grid">
@@ -224,6 +234,7 @@
             <Dropdown v-model="elementForm.shape" :options="shapeOptions" optionLabel="label" optionValue="value" />
             <label>SVG Path</label>
             <Textarea v-model="elementForm.svg_path" rows="2" autoResize />
+            <small class="muted">For shape `Custom`, provide SVG path `d` data (e.g. `M10 10 L90 10 ...`). Local file paths like `D:\\...\\icon.svg` are not supported here.</small>
             <div class="compact-grid two">
               <div class="compact-field">
                 <label>Width</label>
@@ -256,6 +267,9 @@
               <label>Element Preview</label>
             <div ref="previewCanvasRef" class="preview-canvas">
               <div class="preview-element" :style="previewElementStyle">
+                <svg v-if="previewSvgPath" class="preview-custom-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <path :d="previewSvgPath" :fill="elementForm.color || '#3498db'" :stroke="elementForm.border || '#2d83be'" stroke-width="2" />
+                </svg>
                 <div class="preview-title">{{ elementForm.name || 'New Element' }}</div>
                 <div
                   v-for="item in previewVisibleFields"
@@ -290,14 +304,14 @@
                   <label>X (0..1)</label>
                   <InputNumber v-model="port.x" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" showButtons />
                 </div>
-                <div class="compact-field">
-                  <label>Y (0..1)</label>
-                  <InputNumber v-model="port.y" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" showButtons />
-                </div>
-                <div class="compact-field">
-                  <label>Label</label>
-                  <InputText v-model="port.label" placeholder="Port label" />
-                </div>
+              <div class="compact-field">
+                <label>Y (0..1)</label>
+                <InputNumber v-model="port.y" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" showButtons />
+              </div>
+              <div class="compact-field ports-label-field">
+                <label>Label</label>
+                <InputText v-model="port.label" placeholder="Port label" />
+              </div>
               </div>
             </div>
           </div>
@@ -476,7 +490,7 @@ const bulkModes = [{ label: 'By Row', value: 'row' }, { label: 'By Column', valu
 
 const matrixElements = computed(() => matrix.value.elements || []);
 const matrixRows = computed(() => buildMatrixRows(matrix.value));
-const canMutate = computed(() => Boolean(selectedType.value));
+const canMutate = computed(() => Boolean(selectedType.value && !selectedType.value.is_builtin));
 const bulkTargets = computed(() => bulkForm.mode === 'connection_type' ? connectionTypes.value.map((x) => ({ label: x.name, value: x.id })) : matrixElements.value.map((x) => ({ label: x.name, value: x.id })));
 const previewVisibleFields = computed(() =>
   elementFields.value
@@ -488,6 +502,7 @@ const selectedField = computed(() => {
   if (selectedFieldIndex.value < 0) return null;
   return elementFields.value[selectedFieldIndex.value] || null;
 });
+const previewSvgPath = computed(() => (elementForm.shape === 'custom' ? String(elementForm.svg_path || '').trim() : ''));
 const previewElementStyle = computed(() => {
   const w = Math.max(60, Number(elementForm.width) || 120);
   const h = Math.max(40, Number(elementForm.height) || 60);
@@ -501,6 +516,10 @@ const previewElementStyle = computed(() => {
     border: `2px solid ${border}`,
     color: '#ffffff',
   };
+  if (shape === 'custom') {
+    style.background = 'transparent';
+    style.border = 'none';
+  }
   if (shape === 'ellipse' || shape === 'circle') style.borderRadius = '50%';
   else if (shape === 'roundrect' || shape === 'cylinder') style.borderRadius = '16px';
   else if (shape === 'diamond') style.clipPath = 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)';
@@ -646,6 +665,21 @@ const toHexColor = (value) => {
   return value.startsWith('#') ? value : `#${value}`;
 };
 const toPickerColor = (value) => String(value || '#3498db').replace('#', '');
+const isLikelyFilePath = (value) =>
+  typeof value === 'string' && /(^[a-zA-Z]:[\\/])|(^\\\\)|(\.svg$)/i.test(value.trim());
+const validateSvgInput = () => {
+  if (elementForm.shape !== 'custom') return true;
+  const svgPath = String(elementForm.svg_path || '').trim();
+  if (!svgPath) {
+    fail('SVG path is required for custom shape');
+    return false;
+  }
+  if (isLikelyFilePath(svgPath)) {
+    fail('Use SVG path data (`d` attribute), not a local filesystem path');
+    return false;
+  }
+  return true;
+};
 
 const resetElementForm = () => {
   selectedElementType.value = null;
@@ -706,16 +740,37 @@ const fillElementForm = ({ data }) => {
 };
 
 const openCreateElementDialog = () => {
+  if (!canMutate.value) {
+    fail('Select a custom diagram type (or clone built-in) to create elements');
+    return;
+  }
   elementEditor.mode = 'create';
   resetElementForm();
   elementEditor.visible = true;
 };
 
 const openEditElementDialog = () => {
+  if (!canMutate.value) {
+    fail('Built-in diagram types are read-only. Clone it to edit.');
+    return;
+  }
   if (!selectedElementType.value) return;
   elementEditor.mode = 'edit';
   fillElementForm({ data: selectedElementType.value });
   elementEditor.visible = true;
+};
+
+const quickCloneSelectedType = async () => {
+  if (!selectedType.value) return;
+  try {
+    const name = `${selectedType.value.name} (Custom)`;
+    const cloned = await diagramTypesService.clone(selectedType.value.id, name);
+    selectedDiagramTypeId.value = cloned.id;
+    await reloadCatalog();
+    ok('Type cloned. You can edit it now.');
+  } catch (e) {
+    fail(e.message || 'Failed to clone type');
+  }
 };
 
 const fillConnectionForm = ({ data }) => {
@@ -793,14 +848,21 @@ const deleteType = async () => {
 };
 
 const createElement = async () => {
-  if (!selectedDiagramTypeId.value || !canMutate.value) return;
-  if (!elementForm.name?.trim() || !elementForm.key?.trim()) return fail('Element name and key are required');
+  if (!selectedDiagramTypeId.value || !canMutate.value) {
+    fail('Built-in diagram types cannot be modified. Clone type first.');
+    return false;
+  }
+  if (!elementForm.name?.trim() || !elementForm.key?.trim()) {
+    fail('Element name and key are required');
+    return false;
+  }
+  if (!validateSvgInput()) return false;
   try {
     await diagramTypesService.createElement(selectedDiagramTypeId.value, {
       key: elementForm.key,
       name: elementForm.name,
       shape: elementForm.shape,
-      svg_path: elementForm.svg_path || null,
+      svg_path: elementForm.shape === 'custom' ? String(elementForm.svg_path || '').trim() : null,
       default_style: { color: elementForm.color, border: elementForm.border },
       default_size: { width: elementForm.width, height: elementForm.height },
       ports: normalizePortsForApi(),
@@ -809,18 +871,29 @@ const createElement = async () => {
     await loadContext();
     resetElementForm();
     ok('Element created');
-  } catch (e) { fail(e.message || 'Failed to create element'); }
+    return true;
+  } catch (e) {
+    fail(e.message || 'Failed to create element');
+    return false;
+  }
 };
 
 const updateElement = async () => {
-  if (!selectedDiagramTypeId.value || !selectedElementType.value || !canMutate.value) return;
-  if (!elementForm.name?.trim() || !elementForm.key?.trim()) return fail('Element name and key are required');
+  if (!selectedDiagramTypeId.value || !selectedElementType.value || !canMutate.value) {
+    fail('Built-in diagram types cannot be modified. Clone type first.');
+    return false;
+  }
+  if (!elementForm.name?.trim() || !elementForm.key?.trim()) {
+    fail('Element name and key are required');
+    return false;
+  }
+  if (!validateSvgInput()) return false;
   try {
     await diagramTypesService.updateElement(selectedDiagramTypeId.value, selectedElementType.value.id, {
       key: elementForm.key,
       name: elementForm.name,
       shape: elementForm.shape,
-      svg_path: elementForm.svg_path || null,
+      svg_path: elementForm.shape === 'custom' ? String(elementForm.svg_path || '').trim() : null,
       default_style: { color: elementForm.color, border: elementForm.border },
       default_size: { width: elementForm.width, height: elementForm.height },
       ports: normalizePortsForApi(),
@@ -828,7 +901,11 @@ const updateElement = async () => {
     });
     await loadContext();
     ok('Element updated');
-  } catch (e) { fail(e.message || 'Failed to update element'); }
+    return true;
+  } catch (e) {
+    fail(e.message || 'Failed to update element');
+    return false;
+  }
 };
 
 const deleteElement = async () => {
@@ -842,9 +919,8 @@ const deleteElement = async () => {
 };
 
 const submitElementEditor = async () => {
-  if (elementEditor.mode === 'edit') await updateElement();
-  else await createElement();
-  if (!errorMessage.value) elementEditor.visible = false;
+  const success = elementEditor.mode === 'edit' ? await updateElement() : await createElement();
+  if (success) elementEditor.visible = false;
 };
 
 const createConnectionType = async () => {
@@ -1112,7 +1188,7 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0.7rem;
   background: var(--rt-surface-soft);
 }
-.editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: start; }
+.editor-grid { display: grid; grid-template-columns: minmax(520px, 1fr) minmax(520px, 1fr); gap: 1rem; align-items: start; }
 .editor-card {
   min-height: 52vh;
 }
@@ -1162,6 +1238,13 @@ onBeforeUnmount(() => {
 .preview-field-placed.draggable.dragging {
   cursor: grabbing;
   z-index: 3;
+}
+.preview-custom-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .rules-dialog.p-dialog {
@@ -1230,8 +1313,16 @@ onBeforeUnmount(() => {
 
 .rules-dialog :deep(.p-dialog-content) {
   background: var(--rt-surface) !important;
-  max-height: 86vh;
+  max-height: 92vh;
   overflow: auto;
+}
+
+.element-editor-dialog :deep(.p-dialog-content) {
+  padding-bottom: 1rem;
+}
+
+.ports-label-field {
+  grid-column: 1 / -1;
 }
 
 .rules-dialog :deep(.p-inputtext),
@@ -1298,6 +1389,7 @@ html[data-theme='dark'] .p-dialog.rules-dialog .field-editor-panel {
   .card { min-height: 42vh; }
   .editor-grid { grid-template-columns: 1fr; }
   .compact-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ports-label-field { grid-column: 1 / -1; }
   .fields-layout { grid-template-columns: 1fr; min-height: 0; }
   .fields-list { max-height: 180px; }
 }

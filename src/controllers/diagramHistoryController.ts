@@ -44,7 +44,12 @@ export class DiagramHistoryController {
 
     current = async (req: Request, res: Response) => {
         const {diagramId} = req.params;
-        const result = await this.service.getCurrentState(req.auth.userId!, diagramId);
+        const rawVersion = typeof req.query.version === 'string' ? Number(req.query.version) : undefined;
+        if (rawVersion !== undefined && (!Number.isInteger(rawVersion) || rawVersion <= 0)) {
+            return res.status(400).json({error: 'version must be a positive integer'});
+        }
+
+        const result = await this.service.getStateAtVersion(req.auth.userId!, diagramId, rawVersion);
 
         if (result.status === 'not_found') return res.status(404).json({error: 'Diagram not found'});
         if (result.status === 'no_history') return res.status(404).json({error: 'Diagram has no history yet'});

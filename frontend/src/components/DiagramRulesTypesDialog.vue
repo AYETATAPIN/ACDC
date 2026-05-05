@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <Dialog
     v-model:visible="visible"
     modal
@@ -19,7 +19,6 @@
       />
       <div class="actions">
         <Button icon="pi pi-refresh" outlined label="Refresh" @click="reloadCatalog" />
-        <Button icon="pi pi-check" label="Apply To Diagram" :disabled="!selectedDiagramTypeId" @click="applySelectedType" />
       </div>
     </div>
 
@@ -444,7 +443,12 @@ const BUILTIN_DIAGRAM_TYPE_IDS = {
 };
 const SELECTED_TYPE_STORAGE_KEY = 'acdc.rulesDialog.selectedTypeId';
 
-const props = defineProps({ modelValue: Boolean, currentDiagramTypeId: { type: String, default: null } });
+const props = defineProps({
+  modelValue: Boolean,
+  currentDiagramTypeId: { type: String, default: null },
+  connections: { type: Array, default: () => [] },
+  elements: { type: Array, default: () => [] },
+});
 const emit = defineEmits(['update:modelValue', 'apply-diagram-type']);
 
 const visible = computed({ get: () => props.modelValue, set: (v) => emit('update:modelValue', v) });
@@ -895,7 +899,17 @@ const reloadCatalog = async () => {
   }
 };
 
-const onTypeChange = async () => { try { await loadContext(); } catch (e) { fail(e.message || 'Failed to load type'); } };
+const onTypeChange = async () => {
+  try {
+    await loadContext();
+    // Auto-apply when user explicitly selects a type
+    if (selectedType.value) {
+      emit('apply-diagram-type', { type: selectedType.value, elements: elementTypes.value, connectionTypes: connectionTypes.value, rulesMatrix: matrix.value });
+    }
+  } catch (e) {
+    fail(e.message || 'Failed to load type');
+  }
+};
 
 const createBlankType = async () => {
   if (!typeCreateForm.name.trim()) return fail('Name is required');
@@ -1061,6 +1075,32 @@ const toggleCellRule = async (fromEl, toEl, rule) => {
   if (!selectedDiagramTypeId.value || !canMutate.value) return;
   const opKey = `${fromEl.id}:${toEl.id}:${rule.connection_type_id}`;
   if (pendingRuleKey.value === opKey) return;
+
+  // If we are about to BLOCK this rule, check if existing diagram connections violate it
+  const nextAllowed = !Boolean(rule.allowed);
+  if (!nextAllowed) {
+    const violations = asArray(props.connections).filter((conn) => {
+      const fromElement = asArray(props.elements).find((e) => e.id === conn.fromId);
+      const toElement = asArray(props.elements).find((e) => e.id === conn.toId);
+      const fromTypeMatch =
+        fromElement?.element_type_id === fromEl.id ||
+        fromElement?.type === fromEl.key;
+      const toTypeMatch =
+        toElement?.element_type_id === toEl.id ||
+        toElement?.type === toEl.key;
+      const connTypeMatch =
+        conn.connection_type_id === rule.connection_type_id ||
+        conn.type === connectionById(rule.connection_type_id)?.key;
+      return fromTypeMatch && toTypeMatch && connTypeMatch;
+    });
+    if (violations.length > 0) {
+      fail(
+        `Cannot block: ${violations.length} existing connection(s) of this type already exist between these elements on the canvas. Remove them first.`,
+      );
+      return;
+    }
+  }
+
   pendingRuleKey.value = opKey;
   try {
     const rows = buildMatrixRows(matrix.value);
@@ -1068,7 +1108,7 @@ const toggleCellRule = async (fromEl, toEl, rule) => {
     const currentRules = asArray(row?.[toEl.id]).map((item) => ({ ...item }));
     const nextRules = currentRules.map((item) =>
       item.connection_type_id === rule.connection_type_id
-        ? { ...item, allowed: !Boolean(item.allowed) }
+        ? { ...item, allowed: nextAllowed }
         : item,
     );
 
@@ -1182,10 +1222,10 @@ onBeforeUnmount(() => {
 .rt-toast-stack {
   position: fixed;
   z-index: 5000;
-  right: 1.25rem;
-  top: 5.4rem;
+  right: 1.5rem;
+  bottom: 1.5rem;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: 0.55rem;
   pointer-events: none;
 }

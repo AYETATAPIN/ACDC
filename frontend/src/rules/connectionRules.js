@@ -42,7 +42,8 @@ export const isConnectionAllowedByMatrix = ({
   if (isFreeMode) return true;
   const rules = getRulesForCell(matrix, fromElementTypeId, toElementTypeId);
   const rule = rules.find((item) => item.connection_type_id === connectionTypeId);
-  return Boolean(rule?.allowed);
+  if (!rule) return true;
+  return Boolean(rule.allowed);
 };
 
 export const matrixCellToPayload = ({ fromElementTypeId, toElementTypeId, rules }) => ({
@@ -67,4 +68,3 @@ export const buildMatrixRows = (matrix) => {
     return row;
   });
 };
-

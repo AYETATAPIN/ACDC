@@ -2,6 +2,7 @@ import { findBestSegmentIndex, toggleBendPointPoints } from '../utils/bendPoints
 import { diagramsService, diagramTypesService, ApiError } from '../services/index.js';
 import { isConnectionAllowedByMatrix, normalizeRulesMatrix } from '../rules/connectionRules.js';
 import { BUILTIN_DIAGRAM_TYPE_IDS } from '../app-constants.js';
+import { isPointInsideCustomShape, parseCustomShapeData } from '../utils/customShape.js';
 
 export const canvasMethods = {
 getMidPoint(conn) {
@@ -92,10 +93,26 @@ getElementPreset(type) {
       return this.elementPresets.find(p => p.type === type);
     },
 
+    getCustomShapeInfo(type) {
+      const raw = this.getElementPreset(type)?.svg_path || '';
+      return parseCustomShapeData(raw);
+    },
+
     getElementVisibleFields(element) {
       const schema = this.getElementPreset(element?.type)?.field_schema;
       if (!Array.isArray(schema)) return [];
       return schema.filter((field) => field && field.visibleOnBlock !== false);
+    },
+
+    getElementTypeLabel(type) {
+      const preset = this.getElementPreset(type);
+      if (preset?.label && String(preset.label).trim()) return String(preset.label).trim();
+      const raw = String(type || '').trim();
+      if (!raw) return 'Element';
+      return raw
+        .replace(/[_-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/\b\w/g, (ch) => ch.toUpperCase());
     },
 
     getElementFieldStyle(field) {
@@ -144,8 +161,8 @@ selectTool(toolType) {
     },
 
 getElementShape(type) {
-        const preset = this.elementPresets.find(p => p.type === type);
-        if (preset) return preset.shape;
+        const preset = this.getElementPreset(type);
+        if (preset?.shape) return preset.shape;
         
         const activityShapes = {
             'initial': 'circle',
@@ -359,9 +376,7 @@ handleElementClick(element, event) {
 
       // 1. Connection tool has highest priority
       if (this.isConnectionTool(this.currentTool)) {
-        const x = element.x + element.width / 2;
-        const y = element.y + element.height / 2;
-        this.handleConnectionMode(x, y);
+        this.handleConnectionTarget(element);
         return;
       }
 
@@ -381,8 +396,14 @@ deleteElement(element) {
             c => c.from !== element.id && c.to !== element.id
         ));
         this.setElements(this.elements.filter(el => el.id !== element.id));
+        this.selectedElements = this.selectedElements.filter((el) => el.id !== element.id);
         if (this.selectedElement?.id === element.id) {
           this.selectedElement = null;
+        }
+        if (this.selectedElements.length === 0) {
+          this.selectedElement = null;
+        } else {
+          this.selectedElement = this.selectedElements[0] || null;
         }
       }
     },
@@ -391,6 +412,11 @@ handleConnectionMode(x, y) {
       if (!this.isConnectionTool(this.currentTool)) return;
 
       const clickedElement = this.getElementAtPosition(x, y);
+      this.handleConnectionTarget(clickedElement);
+    },
+
+handleConnectionTarget(clickedElement) {
+      if (!this.isConnectionTool(this.currentTool)) return;
 
       if (!clickedElement) {
         this.connectionStart = null;
@@ -402,6 +428,9 @@ handleConnectionMode(x, y) {
         // First click: select starting element
         this.connectionStart = clickedElement;
         this.isConnecting = true;
+        this.selectedElements = [];
+        this.selectedElement = null;
+        this.selectedConnection = null;
         console.log('Connection start:', clickedElement.text);
       } else if (this.connectionStart.id !== clickedElement.id) {
         // Second click: try to create connection
@@ -669,6 +698,7 @@ updateSelectionFromBox() {
           el.y < box.y + box.height
       );
       this.selectedElements = selected;
+      this.selectedElement = selected[0] || null;
     },
 
 isElementSelected(element) {
@@ -706,6 +736,17 @@ getElementAtPosition(x, y) {
           if (normalized <= 1) {
             return element;
           }
+        } else if (shape === 'custom') {
+          const raw = this.getElementPreset(element.type)?.svg_path || '';
+          const xRatio = (x - element.x) / Math.max(1, Number(element.width) || 1);
+          const yRatio = (y - element.y) / Math.max(1, Number(element.height) || 1);
+          if (isPointInsideCustomShape(raw, xRatio, yRatio)) {
+            return element;
+          }
+          // For open or stroke-only custom paths, keep element selectable inside its bbox.
+          if (parseCustomShapeData(raw).d) {
+            return element;
+          }
         } else {
           return element;
         }
@@ -715,6 +756,7 @@ getElementAtPosition(x, y) {
 
 deselectAll() {
       this.selectedElements = [];
+      this.selectedElement = null;
       this.selectedConnection = null;
       this.selectedBendPoint = { connId: null, pointIndex: null };
       this.selectionBox = null;
@@ -784,6 +826,7 @@ selectElement(element, event = { shiftKey: false }) {
         this.selectedElements = [element];
       }
 
+      this.selectedElement = this.selectedElements[0] || null;
       this.selectedConnection = null;
       this.selectedBendPoint = { connId: null, pointIndex: null };
       this.bendEditMode = false;

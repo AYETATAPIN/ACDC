@@ -34,7 +34,7 @@ export class DiagramTypeController {
     }
 
     const created = await this.service.create(req.auth.userId!, {
-      key: typeof req.body.key === 'string' ? req.body.key : null,
+      key: typeof req.body.key === 'string' ? req.body.key.trim() : null,
       name: req.body.name.trim(),
       description: typeof req.body.description === 'string' ? req.body.description : null,
       is_free_mode: Boolean(req.body.is_free_mode),
@@ -81,13 +81,13 @@ export class DiagramTypeController {
   };
 
   createElement = async (req: Request, res: Response) => {
-    if (!isObject(req.body) || typeof req.body.key !== 'string' || typeof req.body.name !== 'string') {
-      return res.status(400).json({ error: 'key and name are required' });
+    if (!isObject(req.body) || typeof req.body.name !== 'string' || !req.body.name.trim()) {
+      return res.status(400).json({ error: 'name is required' });
     }
 
     const payload: ElementTypeCreateInput = {
-      key: req.body.key,
-      name: req.body.name,
+      key: typeof req.body.key === 'string' ? req.body.key.trim() : undefined,
+      name: req.body.name.trim(),
       shape: typeof req.body.shape === 'string' ? req.body.shape : undefined,
       svg_path: typeof req.body.svg_path === 'string' ? req.body.svg_path : undefined,
       default_style: isObject(req.body.default_style) ? req.body.default_style : undefined,
@@ -122,13 +122,13 @@ export class DiagramTypeController {
   };
 
   createConnectionType = async (req: Request, res: Response) => {
-    if (!isObject(req.body) || typeof req.body.key !== 'string' || typeof req.body.name !== 'string') {
-      return res.status(400).json({ error: 'key and name are required' });
+    if (!isObject(req.body) || typeof req.body.name !== 'string' || !req.body.name.trim()) {
+      return res.status(400).json({ error: 'name is required' });
     }
 
     const payload: ConnectionTypeCreateInput = {
-      key: req.body.key,
-      name: req.body.name,
+      key: typeof req.body.key === 'string' ? req.body.key.trim() : undefined,
+      name: req.body.name.trim(),
       color: typeof req.body.color === 'string' ? req.body.color : undefined,
       dash: typeof req.body.dash === 'string' ? req.body.dash : undefined,
       arrow_start: isArrowMarker(req.body.arrow_start) ? req.body.arrow_start : undefined,

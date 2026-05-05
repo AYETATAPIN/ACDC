@@ -250,7 +250,7 @@ export interface ElementTypeEntity {
 }
 
 export interface ElementTypeCreateInput {
-  key: string;
+  key?: string | null;
   name: string;
   shape?: string;
   svg_path?: string | null;
@@ -289,7 +289,7 @@ export interface ConnectionTypeEntity {
 }
 
 export interface ConnectionTypeCreateInput {
-  key: string;
+  key?: string | null;
   name: string;
   color?: string;
   dash?: string;

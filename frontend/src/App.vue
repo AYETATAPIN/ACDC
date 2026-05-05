@@ -365,7 +365,7 @@
                       </div>
                   </div>
                   
-                  <div class="element-type-tag">{{ element.type }}</div>
+                  <div class="element-type-tag">{{ getElementTypeLabel(element.type) }}</div>
               </template>
 
               <!-- Р”Р»СЏ СЂРѕРјР±РѕРІ (decision, merge) -->
@@ -374,18 +374,18 @@
                       <div class="diamond-title" :style="{ fontSize: (element.fontSize || 14) + 'px' }">
                           {{ element.text || getDefaultText(element.type) }}
                       </div>
-                      <div class="diamond-type">{{ element.type }}</div>
+                      <div class="diamond-type">{{ getElementTypeLabel(element.type) }}</div>
                   </div>
               </template>
               <template v-else-if="getElementShape(element.type) === 'custom'">
                   <svg
-                    v-if="(getElementPreset(element.type)?.svg_path || '').trim()"
+                    v-if="getCustomShapeInfo(element.type).d"
                     class="custom-shape-svg"
-                    viewBox="0 0 100 100"
+                    :viewBox="getCustomShapeInfo(element.type).viewBox"
                     preserveAspectRatio="none"
                   >
                     <path
-                      :d="getElementPreset(element.type)?.svg_path || ''"
+                      :d="getCustomShapeInfo(element.type).d"
                       :fill="element.customColor || getElementPreset(element.type)?.color || '#3498db'"
                       :stroke="element.customBorder || getElementPreset(element.type)?.border || '#2d83be'"
                       stroke-width="2"
@@ -402,7 +402,7 @@
                   >
                     {{ getElementFieldDisplayValue(element, field, idx) }}
                   </div>
-                  <div class="element-type-tag">{{ element.type }}</div>
+                  <div class="element-type-tag">{{ getElementTypeLabel(element.type) }}</div>
               </template>
               <template v-else-if="element.type === 'actor'">
                   <div class="actor-container">
@@ -466,7 +466,7 @@
                           {{ element.text || 'Actor' }}
                       </div>
                   </div>
-                  <div class="element-type-tag">{{ element.type }}</div>
+                  <div class="element-type-tag">{{ getElementTypeLabel(element.type) }}</div>
               </template>
               <!-- Р”Р»СЏ РѕСЃС‚Р°Р»СЊРЅС‹С… С‚РёРїРѕРІ -->
               <template v-else>
@@ -481,7 +481,7 @@
                   >
                     {{ getElementFieldDisplayValue(element, field, idx) }}
                   </div>
-                  <div class="element-type-tag">{{ element.type }}</div>
+                  <div class="element-type-tag">{{ getElementTypeLabel(element.type) }}</div>
               </template>
               
               <div class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="Изменить размер"></div>

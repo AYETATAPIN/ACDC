@@ -247,7 +247,8 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
     `CREATE TABLE IF NOT EXISTS share_tokens (
       id UUID PRIMARY KEY,
       diagram_id UUID NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
-      mode TEXT NOT NULL CHECK (mode IN ('snapshot', 'live')),
+      permission TEXT NOT NULL DEFAULT 'read' CHECK (permission IN ('read', 'edit')),
+      mode TEXT NOT NULL DEFAULT 'live' CHECK (mode IN ('live')),
       token_hash TEXT NOT NULL UNIQUE,
       snapshot_version INTEGER,
       revoked_at TIMESTAMPTZ,
@@ -255,6 +256,17 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
       created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+
+    `ALTER TABLE share_tokens ADD COLUMN IF NOT EXISTS permission TEXT`,
+    `UPDATE share_tokens SET permission = 'read' WHERE permission IS NULL`,
+    `ALTER TABLE share_tokens ALTER COLUMN permission SET DEFAULT 'read'`,
+    `ALTER TABLE share_tokens ALTER COLUMN permission SET NOT NULL`,
+    `ALTER TABLE share_tokens DROP CONSTRAINT IF EXISTS share_tokens_permission_check`,
+    `ALTER TABLE share_tokens ADD CONSTRAINT share_tokens_permission_check CHECK (permission IN ('read', 'edit'))`,
+    `ALTER TABLE share_tokens DROP CONSTRAINT IF EXISTS share_tokens_mode_check`,
+    `UPDATE share_tokens SET mode = 'live' WHERE mode IS DISTINCT FROM 'live'`,
+    `ALTER TABLE share_tokens ALTER COLUMN mode SET DEFAULT 'live'`,
+    `ALTER TABLE share_tokens ADD CONSTRAINT share_tokens_mode_check CHECK (mode IN ('live'))`,
 
     `CREATE TABLE IF NOT EXISTS diagram_history (
       id UUID PRIMARY KEY,
@@ -275,6 +287,7 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
     `CREATE INDEX IF NOT EXISTS idx_diagram_connections_diagram_id ON diagram_connections(diagram_id)`,
     `CREATE INDEX IF NOT EXISTS idx_diagram_history_diagram_version ON diagram_history(diagram_id, version)`,
     `CREATE INDEX IF NOT EXISTS idx_share_tokens_diagram ON share_tokens(diagram_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_share_tokens_diagram_permission ON share_tokens(diagram_id, permission)`,
     `CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)`,
   ];

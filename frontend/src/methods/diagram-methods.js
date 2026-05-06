@@ -1,5 +1,5 @@
 import { findBestSegmentIndex, toggleBendPointPoints } from '../utils/bendPoints.js';
-import { diagramsService, diagramTypesService, ApiError } from '../services/index.js';
+import { diagramsService, diagramTypesService, ApiError, clearShareContext, setShareContext, sharesService } from '../services/index.js';
 import { isConnectionAllowedByMatrix, normalizeRulesMatrix } from '../rules/connectionRules.js';
 import { BUILTIN_DIAGRAM_TYPE_IDS } from '../app-constants.js';
 
@@ -8,7 +8,108 @@ generateId() {
       return this.generateUUID();
     },
 
+extractShareTokenFromPath() {
+      if (typeof window === 'undefined') return null;
+      const match = window.location.pathname.match(/^\/share\/([^/?#]+)/);
+      return match ? decodeURIComponent(match[1]) : null;
+    },
+
+openShareDialog() {
+      if (!this.currentDiagramId || !this.accessPolicy.canShare) return;
+      this.shareDialogVisible = true;
+    },
+
+canMutateDiagram(action = 'Это действие') {
+      if (this.accessPolicy.canWrite) return true;
+      this.showError(`${action} недоступно в режиме просмотра по ссылке`);
+      return false;
+    },
+
+applySharedTypeBundle(bundle) {
+      if (!bundle || typeof bundle !== 'object') return;
+      const type = this.normalizeDiagramTypeEntity(bundle.diagram_type);
+      if (type) {
+        this.diagramTypesCatalog = [type];
+        this.currentDiagramTypeId = this.normalizeDiagramTypeId(type.id, type.key);
+        this.currentDiagramTypeEntity = type;
+      }
+      this.customElementTypes = Array.isArray(bundle.element_types) ? bundle.element_types : [];
+      this.customConnectionTypes = Array.isArray(bundle.connection_types) ? bundle.connection_types : [];
+      this.rulesMatrix = normalizeRulesMatrix(bundle.rules_matrix);
+    },
+
+async loadSharedDiagramState() {
+      if (!this.shareToken) return;
+      this.isLoading = true;
+      this.errorMessage = null;
+      this.shareLoadError = null;
+
+      try {
+        const data = await sharesService.getState(this.shareToken);
+        this.shareLoginRequired = false;
+        this.accessPolicy = data.access || {
+          mode: 'shared',
+          permission: 'read',
+          canRead: true,
+          canWrite: false,
+          canShare: false,
+          canDelete: false,
+          canReplaceImport: false,
+          requiresLogin: false,
+        };
+        setShareContext({
+          token: this.shareToken,
+          access: this.accessPolicy,
+          diagramTypeBundle: data.diagram_type_bundle,
+          history: data.history || null,
+        });
+        this.applySharedTypeBundle(data.diagram_type_bundle);
+        this.currentDiagramId = data.diagram?.id || null;
+        this.selectedDiagramId = this.currentDiagramId;
+        this.applySnapshot({
+          diagram: data.diagram,
+          blocks: data.blocks || [],
+          connections: data.connections || [],
+        });
+        this.historyEntries = data.history?.entries || [];
+        this.currentVersion = data.history?.current_version || 0;
+        this.lastSavedState = {
+          elements: [...this.elements],
+          connections: [...this.connections],
+          diagramName: this.diagramName,
+          diagramType: this.diagramType,
+          diagramTypeId: this.currentDiagramTypeId,
+        };
+        this.hasUnsavedChanges = false;
+        this.localHistory = [];
+        this.localHistoryIndex = -1;
+        this.pushLocalHistorySnapshot();
+      } catch (error) {
+        clearShareContext();
+        if (error instanceof ApiError && error.status === 401) {
+          this.shareLoginRequired = true;
+          this.accessPolicy = error.details?.access || {
+            mode: 'shared',
+            permission: 'edit',
+            canRead: true,
+            canWrite: false,
+            canShare: false,
+            canDelete: false,
+            canReplaceImport: false,
+            requiresLogin: true,
+          };
+          this.shareLoadError = null;
+          return;
+        }
+        this.shareLoginRequired = false;
+        this.shareLoadError = error.message || 'Ссылка доступа недействительна или была отозвана.';
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
 async saveDiagram() {
+      if (!this.canMutateDiagram('Сохранение')) return;
       this.isLoading = true;
       this.errorMessage = null;
 
@@ -62,8 +163,14 @@ async saveDiagram() {
           : await diagramsService.create(diagramData);
 
         this.currentDiagramId = result.id || this.currentDiagramId;
+        if (this.accessPolicy.mode === 'shared') {
+          await this.loadSharedDiagramState();
+          return;
+        }
         await this.loadHistory();
-        await this.loadDiagramsList();
+        if (this.accessPolicy.mode === 'owner') {
+          await this.loadDiagramsList();
+        }
 
         this.lastSavedState = {
           elements: [...this.elements],
@@ -81,6 +188,11 @@ async saveDiagram() {
     },
 
 newDiagram() {
+      if (!this.canMutateDiagram('Создание новой диаграммы')) return;
+      if (this.accessPolicy.mode !== 'owner') {
+        this.showError('Новая диаграмма недоступна по ссылке доступа');
+        return;
+      }
       this.setElements([]);
       this.setConnections([]);
       this.diagramName = '';
@@ -115,6 +227,10 @@ async loadHistory() {
     },
 
 async loadDiagramsList() {
+      if (this.accessPolicy.mode === 'shared') {
+        this.diagrams = [];
+        return;
+      }
       this.isLoadingList = true;
       try {
         const items = await diagramsService.list();
@@ -131,6 +247,10 @@ async loadDiagramsList() {
     },
 
 async loadDiagram(diagramId) {
+      if (this.accessPolicy.mode === 'shared') {
+        await this.loadSharedDiagramState();
+        return;
+      }
       this.isLoading = true;
       try {
         const data = await diagramsService.getStateAtVersion(diagramId);
@@ -158,6 +278,8 @@ async loadDiagram(diagramId) {
     },
 
 async loadDiagramVersion(version) {
+      if (!this.accessPolicy.canWrite) return;
+      if (this.accessPolicy.mode === 'shared') return;
       if (!this.currentDiagramId || !Number.isFinite(Number(version))) return;
       this.isLoading = true;
       try {
@@ -172,7 +294,8 @@ async loadDiagramVersion(version) {
     },
 
 async undoDiagram() {
-      if (this.localHistoryIndex > 0) {
+      if (!this.canMutateDiagram('Отмена')) return;
+      if (this.accessPolicy.mode !== 'shared' && this.localHistoryIndex > 0) {
         if (!this.canUndo) {
           this.showError('Нечего отменять');
           return;
@@ -206,6 +329,10 @@ async undoDiagram() {
         };
         this.hasUnsavedChanges = false;
         this.currentVersion = data.version;
+        if (this.accessPolicy.mode === 'shared') {
+          await this.loadSharedDiagramState();
+          return;
+        }
         await this.loadHistory();
       } catch (error) {
         if (error instanceof ApiError && error.status === 400 && /empty/i.test(error.message)) {
@@ -219,7 +346,8 @@ async undoDiagram() {
     },
 
 async redoDiagram() {
-      if (this.localHistoryIndex >= 0 && this.localHistoryIndex < this.localHistory.length - 1) {
+      if (!this.canMutateDiagram('Возврат')) return;
+      if (this.accessPolicy.mode !== 'shared' && this.localHistoryIndex >= 0 && this.localHistoryIndex < this.localHistory.length - 1) {
         if (!this.canRedo) {
           this.showError('Нечего возвращать');
           return;
@@ -253,6 +381,10 @@ async redoDiagram() {
         };
         this.hasUnsavedChanges = false;
         this.currentVersion = data.version;
+        if (this.accessPolicy.mode === 'shared') {
+          await this.loadSharedDiagramState();
+          return;
+        }
         await this.loadHistory();
       } catch (error) {
         if (error instanceof ApiError && error.status === 400 && /empty/i.test(error.message)) {
@@ -501,6 +633,10 @@ exportDiagram() {
     },
 
 async handleImportFileSelected(file) {
+      if (!this.accessPolicy.canReplaceImport) {
+        this.showError('Импорт недоступен по ссылке доступа');
+        return;
+      }
       try {
         const text = await file.text();
         const parsed = JSON.parse(text);
@@ -518,6 +654,10 @@ async handleImportFileSelected(file) {
     },
 
 async confirmImportDiagram(mode) {
+      if (!this.accessPolicy.canReplaceImport) {
+        this.showError('Импорт недоступен по ссылке доступа');
+        return;
+      }
       if (!this.importDialog.file || (mode !== 'create' && mode !== 'replace')) return;
       if (mode === 'replace' && !this.currentDiagramId) {
         this.showError('Нет открытой диаграммы для замены');
@@ -570,6 +710,7 @@ computeInitialElementSize(type, preset, text, fieldSchema) {
     },
 
 createElement(type, x, y) {
+        if (!this.canMutateDiagram('Создание элемента')) return;
         const preset = this.getElementPreset(type);
         const fieldDefaults = this.buildDefaultFieldValues(preset?.field_schema);
         const defaultText = this.getDefaultText(type, preset);

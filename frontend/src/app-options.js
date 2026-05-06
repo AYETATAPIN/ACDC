@@ -9,7 +9,19 @@ import DiagramToolbar from './components/DiagramToolbar.vue';
 import DiagramPropertiesPanel from './components/DiagramPropertiesPanel.vue';
 import DiagramHistoryPanel from './components/DiagramHistoryPanel.vue';
 import DiagramRulesTypesDialog from './components/DiagramRulesTypesDialog.vue';
+import ShareDialog from './components/ShareDialog.vue';
 import { appMethods } from './app-methods.js';
+
+const ownerAccessPolicy = () => ({
+  mode: 'owner',
+  permission: 'owner',
+  canRead: true,
+  canWrite: true,
+  canShare: true,
+  canDelete: true,
+  canReplaceImport: true,
+  requiresLogin: false,
+});
 
 export default {
   name: 'App',
@@ -20,6 +32,7 @@ export default {
     DiagramPropertiesPanel,
     DiagramHistoryPanel,
     DiagramRulesTypesDialog,
+    ShareDialog,
     Dialog,
     InputText,
     Button
@@ -33,6 +46,11 @@ export default {
       authMode: 'login',
       authUser: null,
       authError: null,
+      shareToken: null,
+      shareLoginRequired: false,
+      shareLoadError: null,
+      shareDialogVisible: false,
+      accessPolicy: ownerAccessPolicy(),
       authForm: {
         email: '',
         password: '',
@@ -177,6 +195,7 @@ export default {
     window.addEventListener('keydown', this.handleKeyDown);
     this.initTheme();
     this.pushLocalHistorySnapshot();
+    this.shareToken = this.extractShareTokenFromPath();
     await this.initializeAuth();
   },
 
@@ -192,18 +211,41 @@ export default {
   },
   computed: {
     canUndo() {
+      if (!this.accessPolicy.canWrite) return false;
+      if (this.accessPolicy.mode === 'shared') return this.currentVersion > 1;
       if (this.localHistoryIndex > 0) return true;
       if (this.currentDiagramId) return this.currentVersion > 1;
       return false;
     },
 
     canRedo() {
+      if (!this.accessPolicy.canWrite) return false;
+      if (this.accessPolicy.mode === 'shared') return this.historyEntries.length > this.currentVersion;
       if (this.localHistoryIndex >= 0 && this.localHistoryIndex < this.localHistory.length - 1) return true;
       if (this.currentDiagramId) return this.historyEntries.length > this.currentVersion;
       return false;
     },
 
+    requiresAuthGate() {
+      if (this.authUser) return false;
+      if (this.shareToken) return this.shareLoginRequired;
+      return true;
+    },
+
+    authGateTitle() {
+      if (this.shareLoginRequired) return 'Войдите, чтобы редактировать диаграмму';
+      return '';
+    },
+
+    authGateLead() {
+      if (this.shareLoginRequired) {
+        return 'Эта ссылка дает доступ на редактирование. После входа или регистрации ACDC снова откроет эту же ссылку.';
+      }
+      return '';
+    },
+
     availableConnectionTools() {
+      if (!this.accessPolicy.canWrite) return [];
       if (this.currentDiagramTypeId && this.customConnectionTypes.length > 0) {
         return this.customConnectionTypes.map((conn) => ({
           type: conn.key,
@@ -240,10 +282,11 @@ export default {
     selectionTools() {
       return this.elementPresets.filter(
         (p) => ['select', 'delete'].includes(p.type) && (p.diagrams.includes(this.diagramType) || this.diagramType === 'free_mode'),
-      );
+      ).filter((tool) => this.accessPolicy.canWrite || tool.type !== 'delete');
     },
 
     availableElementTools() {
+      if (!this.accessPolicy.canWrite) return [];
       if (this.currentDiagramTypeId && this.customElementTypes.length > 0) {
         return this.customElementTypes.map((item) => ({
           type: item.key,

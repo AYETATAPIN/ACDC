@@ -5,7 +5,7 @@
         <p class="eyebrow">ACDC</p>
         <h1>{{ title }}</h1>
         <p class="lead">
-          Diagram editor for strict and free-form modeling. Authentication is required before you can access saved diagrams and custom types.
+          {{ lead }}
         </p>
       </div>
 
@@ -65,13 +65,20 @@ export default {
     authForm: { type: Object, required: true },
     authLoading: { type: Boolean, required: true },
     authError: { type: String, default: null },
+    titleOverride: { type: String, default: '' },
+    leadOverride: { type: String, default: '' },
     setAuthMode: { type: Function, required: true },
     updateAuthField: { type: Function, required: true },
     submitAuthForm: { type: Function, required: true },
   },
   computed: {
     title() {
+      if (this.titleOverride) return this.titleOverride;
       return this.authMode === 'register' ? 'Create your ACDC workspace' : 'Sign in to ACDC';
+    },
+    lead() {
+      if (this.leadOverride) return this.leadOverride;
+      return 'Diagram editor for strict and free-form modeling. Authentication is required before you can access saved diagrams and custom types.';
     },
     primaryActionLabel() {
       return this.authMode === 'register' ? 'Create account' : 'Sign in';

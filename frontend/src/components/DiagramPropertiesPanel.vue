@@ -8,17 +8,17 @@
     <div class="content" v-if="selectedElement">
       <div class="field" v-if="selectedElement.type === 'class'">
         <label>Атрибуты</label>
-        <Textarea v-model="classAttributes" rows="4" autoResize @update:modelValue="updateClassProperties" />
+        <Textarea v-model="classAttributes" rows="4" autoResize :disabled="!canWrite" @update:modelValue="updateClassProperties" />
       </div>
 
       <div class="field" v-if="selectedElement.type === 'class'">
         <label>Операции</label>
-        <Textarea v-model="classOperations" rows="4" autoResize @update:modelValue="updateClassProperties" />
+        <Textarea v-model="classOperations" rows="4" autoResize :disabled="!canWrite" @update:modelValue="updateClassProperties" />
       </div>
 
       <div class="field">
         <label>Текст</label>
-        <InputText v-model="selectedElement.text" />
+        <InputText v-model="selectedElement.text" :disabled="!canWrite" />
       </div>
 
       <div class="field field-group" v-if="elementFieldSchema.length">
@@ -30,6 +30,7 @@
             <InputText
               v-if="resolveFieldType(field) === 'text'"
               :modelValue="getFieldValue(field)"
+              :disabled="!canWrite"
               @update:modelValue="setFieldValue(field, $event)"
             />
 
@@ -37,6 +38,7 @@
               v-else-if="resolveFieldType(field) === 'number'"
               :modelValue="toNumberValue(getFieldValue(field))"
               :useGrouping="false"
+              :disabled="!canWrite"
               @update:modelValue="setFieldValue(field, $event)"
             />
 
@@ -47,12 +49,14 @@
               optionLabel="label"
               optionValue="value"
               placeholder="Выберите значение"
+              :disabled="!canWrite"
               @update:modelValue="setFieldValue(field, $event)"
             />
 
             <div v-else-if="resolveFieldType(field) === 'checkbox'" class="row checkbox-row">
               <InputSwitch
                 :modelValue="Boolean(getFieldValue(field))"
+                :disabled="!canWrite"
                 @update:modelValue="setFieldValue(field, $event)"
               />
               <span class="checkbox-value">{{ Boolean(getFieldValue(field)) ? 'Да' : 'Нет' }}</span>
@@ -61,6 +65,7 @@
             <InputText
               v-else
               :modelValue="getFieldValue(field)"
+              :disabled="!canWrite"
               @update:modelValue="setFieldValue(field, $event)"
             />
           </div>
@@ -71,7 +76,7 @@
         <label>Размер шрифта</label>
         <div class="row slider-row">
           <div class="slider-wrap">
-            <Slider v-model="selectedElement.fontSize" :min="10" :max="30" />
+          <Slider v-model="selectedElement.fontSize" :min="10" :max="30" :disabled="!canWrite" />
           </div>
           <Tag :value="`${selectedElement.fontSize || 14}px`" />
         </div>
@@ -81,6 +86,7 @@
         <label>Цвет фона</label>
         <ColorPicker
           :modelValue="selectedElement.customColor || getElementPreset(selectedElement.type)?.color || '#95a5a6'"
+          :disabled="!canWrite"
           @update:modelValue="selectedElement.customColor = toHexColor($event)"
         />
       </div>
@@ -89,6 +95,7 @@
         <label>Цвет границы</label>
         <ColorPicker
           :modelValue="selectedElement.customBorder || getElementPreset(selectedElement.type)?.border || '#2c3e50'"
+          :disabled="!canWrite"
           @update:modelValue="selectedElement.customBorder = toHexColor($event)"
         />
       </div>
@@ -99,13 +106,14 @@
     <div class="content" v-else-if="selectedConnection">
       <div class="field">
         <label>Надпись</label>
-        <InputText v-model="selectedConnection.label" />
+        <InputText v-model="selectedConnection.label" :disabled="!canWrite" />
       </div>
 
       <div class="field">
         <label>Цвет надписи</label>
         <ColorPicker
           :modelValue="selectedConnection.labelColor || '#2c3e50'"
+          :disabled="!canWrite"
           @update:modelValue="selectedConnection.labelColor = toHexColor($event)"
         />
       </div>
@@ -114,7 +122,7 @@
         <label>Размер надписи</label>
         <div class="row slider-row">
           <div class="slider-wrap">
-            <Slider v-model="selectedConnection.labelFontSize" :min="8" :max="24" />
+            <Slider v-model="selectedConnection.labelFontSize" :min="8" :max="24" :disabled="!canWrite" />
           </div>
           <Tag :value="`${selectedConnection.labelFontSize || 12}px`" />
         </div>
@@ -124,23 +132,24 @@
         <label>Цвет линии</label>
         <ColorPicker
           :modelValue="selectedConnection.customColor || '#34495e'"
+          :disabled="!canWrite"
           @update:modelValue="selectedConnection.customColor = toHexColor($event)"
         />
       </div>
 
       <div class="field">
         <label>Стиль линии</label>
-        <Dropdown v-model="selectedConnection.customDash" :options="dashOptions" optionLabel="label" optionValue="value" />
+        <Dropdown v-model="selectedConnection.customDash" :options="dashOptions" optionLabel="label" optionValue="value" :disabled="!canWrite" />
       </div>
 
       <div class="actions">
-        <Button icon="pi pi-plus" label="Точка изгиба" size="small" outlined @click="addSelectedBendPoint()" />
+        <Button icon="pi pi-plus" label="Точка изгиба" size="small" outlined :disabled="!canWrite" @click="addSelectedBendPoint()" />
         <Button
           icon="pi pi-minus-circle"
           label="Удалить точку"
           size="small"
           outlined
-          :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
+          :disabled="!canWrite || !selectedConnection || !hasBendPoints(selectedConnection)"
           @click="selectedBendPoint?.connId ? removeSelectedBendPoint() : (selectedConnection && removeLastBendPoint(selectedConnection))"
         />
         <Button
@@ -148,10 +157,10 @@
           label="Удалить все точки"
           size="small"
           outlined
-          :disabled="!selectedConnection || !hasBendPoints(selectedConnection)"
+          :disabled="!canWrite || !selectedConnection || !hasBendPoints(selectedConnection)"
           @click="selectedConnection && clearBendPoints(selectedConnection)"
         />
-        <Button icon="pi pi-times" label="Удалить связь" size="small" severity="danger" @click="deleteConnection(selectedConnection)" />
+        <Button icon="pi pi-times" label="Удалить связь" size="small" severity="danger" :disabled="!canWrite" @click="deleteConnection(selectedConnection)" />
       </div>
 
       <Tag :severity="selectedConnection.rule_violation ? 'warning' : 'info'" :value="selectedConnection.rule_violation ? 'Нарушение правила' : `Тип: ${toReadableType(selectedConnection.type)}`" />
@@ -186,6 +195,7 @@ export default {
     clearBendPoints: { type: Function, required: true },
     removeSelectedBendPoint: { type: Function, required: true },
     removeLastBendPoint: { type: Function, required: true },
+    canWrite: { type: Boolean, default: true },
   },
   data() {
     return {
@@ -225,6 +235,7 @@ export default {
       return value.startsWith('#') ? value : `#${value}`;
     },
     updateClassProperties() {
+      if (!this.canWrite) return;
       if (this.selectedElement?.type !== 'class') return;
       this.selectedElement.properties = {
         ...this.selectedElement.properties,
@@ -275,6 +286,7 @@ export default {
       return this.selectedElement.properties[key];
     },
     setFieldValue(field, value) {
+      if (!this.canWrite) return;
       this.ensureElementProperties();
       const key = String(field?.key || '').trim();
       if (!key || !this.selectedElement) return;

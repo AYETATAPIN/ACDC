@@ -144,7 +144,8 @@ CREATE INDEX IF NOT EXISTS idx_diagram_history_diagram_version ON diagram_histor
 CREATE TABLE IF NOT EXISTS share_tokens (
   id UUID PRIMARY KEY,
   diagram_id UUID NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
-  mode TEXT NOT NULL CHECK (mode IN ('snapshot', 'live')),
+  permission TEXT NOT NULL DEFAULT 'read' CHECK (permission IN ('read', 'edit')),
+  mode TEXT NOT NULL DEFAULT 'live' CHECK (mode IN ('live')),
   token_hash TEXT NOT NULL UNIQUE,
   snapshot_version INTEGER,
   revoked_at TIMESTAMPTZ,
@@ -154,3 +155,4 @@ CREATE TABLE IF NOT EXISTS share_tokens (
 );
 
 CREATE INDEX IF NOT EXISTS idx_share_tokens_diagram_id ON share_tokens (diagram_id);
+CREATE INDEX IF NOT EXISTS idx_share_tokens_diagram_permission ON share_tokens (diagram_id, permission);

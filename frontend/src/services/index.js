@@ -5,3 +5,10 @@ export { diagramTypesService } from './diagramTypesService.js';
 export { rulesService } from './rulesService.js';
 export { elementsService } from './elementsService.js';
 export { connectionsService } from './connectionsService.js';
+export {
+  clearShareContext,
+  getShareContext,
+  isSharedContext,
+  setShareContext,
+  sharesService,
+} from './sharesService.js';

@@ -96,11 +96,13 @@ setConnections(nextConnections) {
     },
 
 setDiagramName(value) {
+      if (!this.accessPolicy.canWrite) return;
       this.diagramName = value;
       this.queueLocalHistorySnapshot();
     },
 
 setDiagramType(value) {
+      if (!this.accessPolicy.canWrite) return;
       const normalizedValue = this.normalizeDiagramTypeId(value, value);
       const matchedById = this.diagramTypesCatalog.find(
         (item) => this.normalizeDiagramTypeId(item.id, item.key) === normalizedValue,
@@ -182,6 +184,10 @@ setSelectedDiagramId(value) {
     },
 
 openRulesDialog() {
+      if (!this.accessPolicy.canWrite) {
+        this.showError('Правила и типы недоступны в режиме просмотра');
+        return;
+      }
       this.showRulesDialog = true;
     },
 
@@ -212,6 +218,7 @@ async loadActiveDiagramTypeContext(diagramTypeId) {
     },
 
 handleApplyDiagramType(payload) {
+      if (!this.accessPolicy.canWrite) return;
       const type = payload?.type;
       if (!type) return;
 
@@ -316,6 +323,7 @@ handleKeyDown(event) {
       const ctrlOrMeta = event.ctrlKey || event.metaKey;
       if (ctrlOrMeta && event.key.toLowerCase() === 'z') {
         event.preventDefault();
+        if (!this.accessPolicy.canWrite) return;
         if (event.shiftKey) {
           this.redoDiagram();
         } else {
@@ -326,6 +334,7 @@ handleKeyDown(event) {
 
       if (ctrlOrMeta && event.key.toLowerCase() === 'y') {
         event.preventDefault();
+        if (!this.accessPolicy.canWrite) return;
         this.redoDiagram();
         return;
       }
@@ -337,6 +346,7 @@ handleKeyDown(event) {
 
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
+        if (!this.accessPolicy.canWrite) return;
         if (this.selectedBendPoint.connId) {
           this.removeSelectedBendPoint();
           return;

@@ -6,6 +6,7 @@ import { getCustomShapeBoundaryTowards, getCustomShapeNearestBoundary, parseCust
 
 export const connectionMethods = {
 deleteConnection(connection) {
+      if (!this.canMutateDiagram('Удаление связи')) return;
       if (confirm('Delete this connection?')) {
         this.setConnections(this.connections.filter(c => c.id !== connection.id));
         this.selectedConnection = null;
@@ -247,6 +248,7 @@ connectionRuleMessage(fromElement, toElement, connectionType) {
     },
 
 createConnection(fromElement, toElement) {
+      if (!this.canMutateDiagram('Создание связи')) return;
       console.log('Creating connection from:', fromElement, 'to:', toElement);
 
       if (!this.isConnectionAllowed(fromElement, toElement, this.currentTool)) {
@@ -319,6 +321,10 @@ addSelectedConnectionBendPoint() {
 
 handleBendPointMouseDown(conn, pointIndex, event) {
       if (!conn || !Array.isArray(conn.points)) return;
+      if (!this.accessPolicy.canWrite) {
+        this.selectConnection(conn);
+        return;
+      }
       if (event.altKey || event.ctrlKey || event.metaKey) {
         this.removeBendPoint(conn, pointIndex);
         return;
@@ -349,6 +355,7 @@ handleBendPointMouseDown(conn, pointIndex, event) {
     },
 
 saveBendPointDialog() {
+      if (!this.accessPolicy.canWrite) return;
       const { connId, pointIndex, label } = this.bendPointDialog;
       if (!connId && connId !== 0) return;
       this.setConnections(this.connections.map((conn) => {
@@ -361,6 +368,7 @@ saveBendPointDialog() {
     },
 
 deleteBendPointFromDialog() {
+      if (!this.accessPolicy.canWrite) return;
       const { connId, pointIndex } = this.bendPointDialog;
       const conn = this.connections.find((c) => c.id === connId);
       if (conn) this.removeBendPoint(conn, pointIndex);
@@ -369,6 +377,7 @@ deleteBendPointFromDialog() {
 
 startEndpointDrag(conn, which) {
       if (!conn) return;
+      if (!this.accessPolicy.canWrite) return;
       this.selectedConnection = conn;
       this.selectedElement = null;
       this.draggingEndpoint = { connId: conn.id, which };
@@ -446,6 +455,7 @@ getConnectionEndpoints(conn) {
 
 removeBendPoint(conn, pointIndex) {
       if (!conn || !Array.isArray(conn.points)) return;
+      if (!this.canMutateDiagram('Изменение точки изгиба')) return;
       if (pointIndex <= 0 || pointIndex >= conn.points.length - 1) return;
       const points = conn.points.slice();
       points.splice(pointIndex, 1);
@@ -501,6 +511,7 @@ projectPointToSegment(point, a, b) {
     },
 
 addBendPoint(conn, event) {
+      if (!this.canMutateDiagram('Изменение точки изгиба')) return;
       const point = this.getCanvasPointFromClient(event.clientX, event.clientY);
       const points = this.normalizeConnectionPoints(conn);
       if (points.length < 2) return;
@@ -512,6 +523,7 @@ addBendPoint(conn, event) {
     },
 
 toggleBendPoint(conn, event) {
+      if (!this.canMutateDiagram('Изменение точки изгиба')) return;
       const point = this.getCanvasPointFromClient(event.clientX, event.clientY);
       const points = this.normalizeConnectionPoints(conn);
       if (points.length < 2) return;
@@ -537,6 +549,7 @@ toggleBendPoint(conn, event) {
     },
 
 addBendPointAtMidpoint(conn) {
+      if (!this.canMutateDiagram('Изменение точки изгиба')) return;
       const liveConn = this.resolveLiveConnection(conn) || this.resolveLiveConnection(this.selectedConnection);
       if (!liveConn) return;
       const points = this.normalizeConnectionPoints(liveConn);
@@ -586,6 +599,7 @@ addBendPointAtMidpoint(conn) {
     },
 
 clearBendPoints(conn) {
+      if (!this.canMutateDiagram('Изменение точек изгиба')) return;
       const points = this.normalizeConnectionPoints(conn);
       if (points.length < 2) return;
       const trimmed = [points[0], points[points.length - 1]];

@@ -34,7 +34,7 @@
 
     <div v-if="selectedType?.is_builtin" class="builtin-warning">
       <span class="builtin-warning-text">Built-in types are read-only. Clone this type to customize elements, connections, and rules.</span>
-      <Button text icon="pi pi-copy" label="Clone for editing" class="builtin-warning-action" @click="quickCloneSelectedType" />
+      <Button text icon="pi pi-copy" label="Clone for editing" class="builtin-warning-action" :disabled="isSharedMode" @click="quickCloneSelectedType" />
     </div>
 
     <TabView>
@@ -59,12 +59,12 @@
             />
           </div>
           <div class="actions">
-            <Button label="Create From Scratch" icon="pi pi-plus" @click="createBlankType" />
+            <Button label="Create From Scratch" icon="pi pi-plus" :disabled="isSharedMode || !accessCanWrite" @click="createBlankType" />
             <Button
               label="Create From Existing"
               icon="pi pi-copy"
               severity="secondary"
-              :disabled="!typeCreateForm.cloneFromId"
+              :disabled="!typeCreateForm.cloneFromId || isSharedMode || !accessCanWrite"
               @click="createCloneType"
             />
           </div>
@@ -82,8 +82,8 @@
               <InputSwitch v-model="typeEditForm.is_free_mode" :disabled="selectedType.is_builtin" />
             </div>
             <div class="actions">
-              <Button label="Save" icon="pi pi-save" :disabled="selectedType.is_builtin" @click="updateType" />
-              <Button v-if="!selectedType.is_builtin" label="Delete" icon="pi pi-trash" severity="danger" outlined @click="deleteType" />
+              <Button label="Save" icon="pi pi-save" :disabled="!canMutate" @click="updateType" />
+              <Button v-if="!selectedType.is_builtin" label="Delete" icon="pi pi-trash" severity="danger" outlined :disabled="isSharedMode || !accessCanWrite" @click="deleteType" />
             </div>
           </template>
         </section>
@@ -448,6 +448,7 @@ const props = defineProps({
   currentDiagramTypeId: { type: String, default: null },
   connections: { type: Array, default: () => [] },
   elements: { type: Array, default: () => [] },
+  accessPolicy: { type: Object, default: () => ({ canWrite: true, mode: 'owner' }) },
 });
 const emit = defineEmits(['update:modelValue', 'apply-diagram-type']);
 
@@ -502,7 +503,9 @@ const bulkModes = [{ label: 'By Row', value: 'row' }, { label: 'By Column', valu
 
 const matrixElements = computed(() => matrix.value.elements || []);
 const matrixRows = computed(() => buildMatrixRows(matrix.value));
-const canMutate = computed(() => Boolean(selectedType.value && !selectedType.value.is_builtin));
+const accessCanWrite = computed(() => props.accessPolicy?.canWrite !== false);
+const isSharedMode = computed(() => props.accessPolicy?.mode === 'shared');
+const canMutate = computed(() => Boolean(accessCanWrite.value && selectedType.value && !selectedType.value.is_builtin));
 const bulkTargets = computed(() => bulkForm.mode === 'connection_type' ? connectionTypes.value.map((x) => ({ label: x.name, value: x.id })) : matrixElements.value.map((x) => ({ label: x.name, value: x.id })));
 const previewVisibleFields = computed(() =>
   elementFields.value

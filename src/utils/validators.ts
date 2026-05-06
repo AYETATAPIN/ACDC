@@ -23,6 +23,7 @@ const isObject = (value: unknown): value is Record<string, any> => typeof value 
 type FrontendElement = {
   id?: string;
   type: string;
+  element_type_id?: string | null;
   x: number;
   y: number;
   width?: number;
@@ -51,6 +52,7 @@ const validateElementsInput = (value: any): FrontendElement[] | null => {
     if (!isObject(el)) return null;
     if (typeof el.type !== 'string' || typeof el.x !== 'number' || typeof el.y !== 'number') return null;
     if (el.id !== undefined && typeof el.id !== 'string') return null;
+    if (el.element_type_id !== undefined && el.element_type_id !== null && !isUuid(el.element_type_id)) return null;
     if (el.width !== undefined && typeof el.width !== 'number') return null;
     if (el.height !== undefined && typeof el.height !== 'number') return null;
     if (el.text !== undefined && typeof el.text !== 'string') return null;
@@ -59,6 +61,7 @@ const validateElementsInput = (value: any): FrontendElement[] | null => {
     result.push({
       id: el.id,
       type: el.type,
+      element_type_id: el.element_type_id,
       x: el.x,
       y: el.y,
       width: el.width,

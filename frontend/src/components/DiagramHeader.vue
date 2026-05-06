@@ -4,7 +4,7 @@
       <div class="row">
         <div class="field">
           <label>Название</label>
-          <InputText :modelValue="diagramName" placeholder="Название диаграммы" @update:modelValue="setDiagramName" />
+          <InputText :modelValue="diagramName" placeholder="Название диаграммы" :disabled="!accessPolicy.canWrite" @update:modelValue="setDiagramName" />
         </div>
         <div class="field">
           <label>Тип</label>
@@ -13,6 +13,7 @@
             :options="typeOptions"
             optionLabel="label"
             optionValue="value"
+            :disabled="!accessPolicy.canWrite"
             @update:modelValue="setDiagramType"
           />
         </div>
@@ -28,19 +29,23 @@
 
       <div class="row actions">
         <Button :label="snapToGrid ? 'Сетка: вкл' : 'Сетка: выкл'" :severity="snapToGrid ? 'success' : 'secondary'" outlined @click="toggleGrid" />
-        <Button icon="pi pi-save" :label="hasUnsavedChanges ? 'Сохранить *' : 'Сохранить'" :severity="hasUnsavedChanges ? 'warning' : 'primary'" @click="saveDiagram" />
-        <Button icon="pi pi-plus" label="Новая" outlined @click="newDiagram" />
+        <Button icon="pi pi-save" :label="hasUnsavedChanges ? 'Сохранить *' : 'Сохранить'" :severity="hasUnsavedChanges ? 'warning' : 'primary'" :disabled="!accessPolicy.canWrite" @click="saveDiagram" />
+        <Button icon="pi pi-plus" label="Новая" outlined :disabled="accessPolicy.mode !== 'owner' || !accessPolicy.canWrite" @click="newDiagram" />
+        <Button icon="pi pi-download" label="Экспорт" outlined @click="exportDiagram" />
+        <Button icon="pi pi-upload" label="Импорт" outlined :disabled="!accessPolicy.canReplaceImport" @click="openImportPicker" />
+        <input ref="importInput" type="file" accept=".json,.acdc,.acdc.json,application/json" class="file-input" @change="onImportFileChange" />
         <Button icon="pi pi-undo" label="Undo" outlined :disabled="!canUndo" @click="undoDiagram" />
         <Button icon="pi pi-redo" label="Redo" outlined :disabled="!canRedo" @click="redoDiagram" />
         <Button :icon="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'" :label="isDarkTheme ? 'Светлая тема' : 'Темная тема'" outlined @click="toggleTheme" />
-        <Button icon="pi pi-sitemap" label="Правила и типы" severity="help" outlined @click="openRulesDialog" />
+        <Button icon="pi pi-sitemap" label="Правила и типы" severity="help" outlined :disabled="!accessPolicy.canWrite" @click="openRulesDialog" />
+        <Button v-if="currentDiagramId && accessPolicy.canShare" icon="pi pi-share-alt" label="Поделиться" severity="success" outlined @click="openShareDialog" />
         <div v-if="authUser" class="auth-chip">
           <span>{{ authUser.display_name || authUser.email }}</span>
           <Button icon="pi pi-sign-out" label="Выйти" severity="secondary" text @click="logout" />
         </div>
       </div>
 
-      <div class="row">
+      <div v-if="accessPolicy.mode === 'owner'" class="row">
         <div class="field long">
           <label>Сохраненные диаграммы</label>
           <Dropdown
@@ -91,6 +96,7 @@ export default {
     isLoadingList: { type: Boolean, required: true },
     zoom: { type: Number, required: true },
     authUser: { type: Object, default: null },
+    accessPolicy: { type: Object, required: true },
     selectedConnection: { type: Object, default: null },
     selectedBendPoint: { type: Object, default: null },
     hasBendPoints: { type: Function, required: true },
@@ -100,6 +106,8 @@ export default {
     toggleGrid: { type: Function, required: true },
     saveDiagram: { type: Function, required: true },
     newDiagram: { type: Function, required: true },
+    exportDiagram: { type: Function, required: true },
+    handleImportFileSelected: { type: Function, required: true },
     undoDiagram: { type: Function, required: true },
     redoDiagram: { type: Function, required: true },
     loadDiagram: { type: Function, required: true },
@@ -110,6 +118,7 @@ export default {
     openRulesDialog: { type: Function, required: true },
     toggleTheme: { type: Function, required: true },
     logout: { type: Function, required: true },
+    openShareDialog: { type: Function, required: true },
   },
   computed: {
     selectedDiagramTypeValue() {
@@ -147,6 +156,18 @@ export default {
       this.setSelectedDiagramId(value || null);
       if (value) {
         this.loadDiagram(value);
+      }
+    },
+    openImportPicker() {
+      this.$refs.importInput?.click();
+    },
+    onImportFileChange(event) {
+      const file = event.target?.files?.[0];
+      if (file) {
+        this.handleImportFileSelected(file);
+      }
+      if (event.target) {
+        event.target.value = '';
       }
     },
   },
@@ -224,5 +245,9 @@ export default {
   color: var(--app-text, #0f172a);
   font-size: 0.86rem;
   font-weight: 600;
+}
+
+.file-input {
+  display: none;
 }
 </style>

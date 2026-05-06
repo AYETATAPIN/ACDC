@@ -5,15 +5,25 @@
     </div>
 
     <AuthGate
-      v-else-if="!authUser"
+      v-else-if="requiresAuthGate"
       :auth-mode="authMode"
       :auth-form="authForm"
       :auth-loading="authLoading"
       :auth-error="authError"
+      :title-override="authGateTitle"
+      :lead-override="authGateLead"
       :set-auth-mode="setAuthMode"
       :update-auth-field="updateAuthField"
       :submit-auth-form="submitAuthForm"
     />
+
+    <div v-else-if="shareLoadError" class="share-error-screen">
+      <div class="share-error-card">
+        <p class="share-error-eyebrow">ACDC</p>
+        <h1>Ссылка недействительна</h1>
+        <p>{{ shareLoadError }}</p>
+      </div>
+    </div>
 
     <template v-else>
     <DiagramHeader
@@ -36,12 +46,15 @@
       :selected-connection="selectedConnection"
       :selected-bend-point="selectedBendPoint"
       :has-bend-points="hasBendPoints"
+      :access-policy="accessPolicy"
       :set-diagram-name="setDiagramName"
       :set-diagram-type="setDiagramType"
       :set-selected-diagram-id="setSelectedDiagramId"
       :toggle-grid="toggleGrid"
       :save-diagram="saveDiagram"
       :new-diagram="newDiagram"
+      :export-diagram="exportDiagram"
+      :handle-import-file-selected="handleImportFileSelected"
       :undo-diagram="undoDiagram"
       :redo-diagram="redoDiagram"
       :load-diagram="loadDiagram"
@@ -52,6 +65,7 @@
       :open-rules-dialog="openRulesDialog"
       :toggle-theme="toggleTheme"
       :logout="logout"
+      :open-share-dialog="openShareDialog"
     />
 
     <DiagramRulesTypesDialog
@@ -59,8 +73,33 @@
       :current-diagram-type-id="currentDiagramTypeId"
       :connections="connections"
       :elements="elements"
+      :access-policy="accessPolicy"
       @apply-diagram-type="handleApplyDiagramType"
     />
+
+    <ShareDialog
+      v-model="shareDialogVisible"
+      :diagram-id="currentDiagramId"
+    />
+
+    <Dialog v-model:visible="importDialog.visible" modal header="Импорт диаграммы" :style="{ width: '440px' }">
+      <div class="bend-dialog-form">
+        <label>Файл</label>
+        <InputText :modelValue="importDialog.fileName" readonly />
+      </div>
+      <template #footer>
+        <Button label="Создать новую" icon="pi pi-plus" :loading="isImporting" @click="confirmImportDiagram('create')" />
+        <Button
+          label="Заменить текущую"
+          icon="pi pi-refresh"
+          severity="warning"
+          outlined
+          :disabled="!currentDiagramId"
+          :loading="isImporting"
+          @click="confirmImportDiagram('replace')"
+        />
+      </template>
+    </Dialog>
 
     <div v-if="errorMessage" class="error-toast">
       <div class="error-content">
@@ -87,6 +126,7 @@
           :connections-count="connections.length"
           :is-connecting="isConnecting"
           :is-dragging="isDragging"
+          :access-policy="accessPolicy"
       />
 
       <div class="canvas"
@@ -156,9 +196,9 @@
                     stroke-width="2"
                     style="pointer-events: all; cursor: move;"
                     @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)"
-                    @dblclick.stop.prevent="removeBendPoint(conn, idx)"
+                    @dblclick.stop.prevent="accessPolicy.canWrite && removeBendPoint(conn, idx)"
                 />
-                <circle v-if="idx > 0 && idx < (conn.points.length - 1)" :cx="pt.x" :cy="pt.y" r="14" fill="transparent" style="pointer-events: all; cursor: move;" @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)" @dblclick.stop.prevent="removeBendPoint(conn, idx)" />
+                <circle v-if="idx > 0 && idx < (conn.points.length - 1)" :cx="pt.x" :cy="pt.y" r="14" fill="transparent" style="pointer-events: all; cursor: move;" @mousedown.stop.prevent="handleBendPointMouseDown(conn, idx, $event)" @dblclick.stop.prevent="accessPolicy.canWrite && removeBendPoint(conn, idx)" />
                 <text
                     v-if="idx > 0 && idx < (conn.points.length - 1) && pt.label"
                     :x="pt.x"
@@ -488,7 +528,7 @@
                   <div class="element-type-tag">{{ getElementTypeLabel(element.type) }}</div>
               </template>
               
-              <div class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="Изменить размер"></div>
+              <div v-if="accessPolicy.canWrite" class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="Изменить размер"></div>
           </div>
         </div>
       </div>
@@ -506,6 +546,7 @@
         :remove-selected-bend-point="removeSelectedBendPoint"
         :remove-last-bend-point="removeLastBendPoint"
         :delete-connection="deleteConnection" 
+        :can-write="accessPolicy.canWrite"
       />
 
       <DiagramHistoryPanel
@@ -525,8 +566,8 @@
         <InputText id="bend-point-label" v-model="bendPointDialog.label" placeholder="Например: decision branch" />
       </div>
       <template #footer>
-        <Button label="Удалить точку" icon="pi pi-trash" severity="danger" outlined @click="deleteBendPointFromDialog" />
-        <Button label="Сохранить" icon="pi pi-check" @click="saveBendPointDialog" />
+        <Button label="Удалить точку" icon="pi pi-trash" severity="danger" outlined :disabled="!accessPolicy.canWrite" @click="deleteBendPointFromDialog" />
+        <Button label="Сохранить" icon="pi pi-check" :disabled="!accessPolicy.canWrite" @click="saveBendPointDialog" />
       </template>
     </Dialog>
     </template>
@@ -536,4 +577,3 @@
 <script src="./app-options.js"></script>
 
 <style src="./styles/app.css"></style>
-

@@ -1,7 +1,22 @@
-import { authService, ApiError } from '../services/index.js';
+import { authService, ApiError, clearShareContext } from '../services/index.js';
+
+const ownerAccessPolicy = () => ({
+  mode: 'owner',
+  permission: 'owner',
+  canRead: true,
+  canWrite: true,
+  canShare: true,
+  canDelete: true,
+  canReplaceImport: true,
+  requiresLogin: false,
+});
 
 export const authMethods = {
   resetWorkspaceForSignedOutUser() {
+    if (!this.shareToken) {
+      this.accessPolicy = ownerAccessPolicy();
+      clearShareContext();
+    }
     this.diagramName = '';
     this.diagramType = 'class';
     this.currentDiagramTypeId = null;
@@ -37,7 +52,11 @@ export const authMethods = {
       const response = await authService.me();
       this.authUser = response.user || null;
 
-      if (this.authUser) {
+      if (this.shareToken) {
+        await this.loadSharedDiagramState();
+      } else if (this.authUser) {
+        this.accessPolicy = ownerAccessPolicy();
+        clearShareContext();
         await Promise.all([this.loadDiagramTypesCatalog(), this.loadDiagramsList()]);
       } else {
         this.resetWorkspaceForSignedOutUser();
@@ -48,7 +67,11 @@ export const authMethods = {
       }
 
       this.authUser = null;
-      this.resetWorkspaceForSignedOutUser();
+      if (this.shareToken) {
+        await this.loadSharedDiagramState();
+      } else {
+        this.resetWorkspaceForSignedOutUser();
+      }
     } finally {
       this.authReady = true;
     }
@@ -91,7 +114,13 @@ export const authMethods = {
         display_name: this.authForm.display_name,
       };
 
-      await Promise.all([this.loadDiagramTypesCatalog(), this.loadDiagramsList()]);
+      if (this.shareToken) {
+        await this.loadSharedDiagramState();
+      } else {
+        this.accessPolicy = ownerAccessPolicy();
+        clearShareContext();
+        await Promise.all([this.loadDiagramTypesCatalog(), this.loadDiagramsList()]);
+      }
     } catch (error) {
       this.authError = error.message || 'Authentication failed';
     } finally {
@@ -114,6 +143,9 @@ export const authMethods = {
         display_name: '',
       };
       this.resetWorkspaceForSignedOutUser();
+      if (this.shareToken) {
+        await this.loadSharedDiagramState();
+      }
     }
   },
 };

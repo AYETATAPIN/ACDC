@@ -5,6 +5,7 @@
   DiagramConnectionCreateInput,
   DiagramConnectionUpdateInput,
   DiagramCreateInput,
+  DiagramImportInput,
   DiagramKind,
   DiagramUpdateInput,
 } from '../types.js';
@@ -22,6 +23,7 @@ const isObject = (value: unknown): value is Record<string, any> => typeof value 
 type FrontendElement = {
   id?: string;
   type: string;
+  element_type_id?: string | null;
   x: number;
   y: number;
   width?: number;
@@ -50,6 +52,7 @@ const validateElementsInput = (value: any): FrontendElement[] | null => {
     if (!isObject(el)) return null;
     if (typeof el.type !== 'string' || typeof el.x !== 'number' || typeof el.y !== 'number') return null;
     if (el.id !== undefined && typeof el.id !== 'string') return null;
+    if (el.element_type_id !== undefined && el.element_type_id !== null && !isUuid(el.element_type_id)) return null;
     if (el.width !== undefined && typeof el.width !== 'number') return null;
     if (el.height !== undefined && typeof el.height !== 'number') return null;
     if (el.text !== undefined && typeof el.text !== 'string') return null;
@@ -58,6 +61,7 @@ const validateElementsInput = (value: any): FrontendElement[] | null => {
     result.push({
       id: el.id,
       type: el.type,
+      element_type_id: el.element_type_id,
       x: el.x,
       y: el.y,
       width: el.width,
@@ -178,6 +182,92 @@ export const validateUpdate = (
 
   if (Object.keys(out).length === 0) return { ok: false, error: 'At least one field must be provided' };
   return { ok: true, data: out };
+};
+
+const validateAcdcPointArray = (value: unknown): boolean => {
+  if (!Array.isArray(value)) return false;
+  return value.every((point) => isObject(point) && typeof point.x === 'number' && typeof point.y === 'number');
+};
+
+const validateAcdcBlocks = (value: unknown): boolean => {
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (block) =>
+      isObject(block) &&
+      typeof block.id === 'string' &&
+      typeof block.type === 'string' &&
+      typeof block.x === 'number' &&
+      typeof block.y === 'number' &&
+      typeof block.width === 'number' &&
+      typeof block.height === 'number' &&
+      (block.element_type_id === undefined || block.element_type_id === null || typeof block.element_type_id === 'string') &&
+      (block.properties === undefined || isObject(block.properties)),
+  );
+};
+
+const validateAcdcConnections = (value: unknown): boolean => {
+  if (!Array.isArray(value)) return false;
+  return value.every(
+    (connection) =>
+      isObject(connection) &&
+      typeof connection.id === 'string' &&
+      typeof connection.from_block_id === 'string' &&
+      typeof connection.to_block_id === 'string' &&
+      typeof connection.type === 'string' &&
+      (connection.connection_type_id === undefined ||
+        connection.connection_type_id === null ||
+        typeof connection.connection_type_id === 'string') &&
+      (connection.label === undefined || connection.label === null || typeof connection.label === 'string') &&
+      (connection.points === undefined || validateAcdcPointArray(connection.points)) &&
+      (connection.properties === undefined || isObject(connection.properties)) &&
+      (connection.rule_violation === undefined || typeof connection.rule_violation === 'boolean'),
+  );
+};
+
+const validateAcdcTypeBundle = (value: unknown): boolean => {
+  if (!isObject(value)) return false;
+  const { diagram_type, element_types, connection_types, rules_matrix } = value;
+  if (!isObject(diagram_type) || typeof diagram_type.name !== 'string') return false;
+  if (diagram_type.id !== undefined && typeof diagram_type.id !== 'string') return false;
+  if (diagram_type.key !== undefined && diagram_type.key !== null && typeof diagram_type.key !== 'string') return false;
+  if (!Array.isArray(element_types) || !Array.isArray(connection_types)) return false;
+  if (!element_types.every((item) => isObject(item) && typeof item.id === 'string' && typeof item.key === 'string' && typeof item.name === 'string')) {
+    return false;
+  }
+  if (
+    !connection_types.every(
+      (item) => isObject(item) && typeof item.id === 'string' && typeof item.key === 'string' && typeof item.name === 'string',
+    )
+  ) {
+    return false;
+  }
+  if (!isObject(rules_matrix) || !Array.isArray(rules_matrix.cells)) return false;
+  return true;
+};
+
+export const validateDiagramImport = (body: any): { ok: true; data: DiagramImportInput } | { ok: false; error: string } => {
+  if (!isObject(body)) return { ok: false, error: 'Body must be an object' };
+  if (body.mode !== 'create' && body.mode !== 'replace') return { ok: false, error: 'mode must be create or replace' };
+  if (body.mode === 'replace' && !isUuid(body.target_diagram_id)) {
+    return { ok: false, error: 'target_diagram_id must be a UUID for replace imports' };
+  }
+
+  const file = body.file;
+  if (!isObject(file)) return { ok: false, error: 'file must be an object' };
+  if (file.format !== 'acdc.diagram' || file.version !== 1) return { ok: false, error: 'Unsupported ACDC diagram format' };
+  if (typeof file.exported_at !== 'string') return { ok: false, error: 'exported_at is required' };
+  if (!isObject(file.diagram)) return { ok: false, error: 'diagram is required' };
+  if (typeof file.diagram.name !== 'string' || !file.diagram.name.trim()) return { ok: false, error: 'diagram.name is required' };
+  if (!isDiagramType(file.diagram.type)) return { ok: false, error: 'diagram.type is invalid' };
+  if (file.diagram.diagram_type_id !== undefined && typeof file.diagram.diagram_type_id !== 'string') {
+    return { ok: false, error: 'diagram.diagram_type_id must be a string' };
+  }
+  if (typeof file.diagram.svg_data !== 'string') return { ok: false, error: 'diagram.svg_data is required' };
+  if (!validateAcdcBlocks(file.blocks)) return { ok: false, error: 'blocks has invalid shape' };
+  if (!validateAcdcConnections(file.connections)) return { ok: false, error: 'connections has invalid shape' };
+  if (!validateAcdcTypeBundle(file.diagram_type_bundle)) return { ok: false, error: 'diagram_type_bundle has invalid shape' };
+
+  return { ok: true, data: body as DiagramImportInput };
 };
 
 export const validateBlockCreate = (body: any): { ok: true; data: DiagramBlockCreateInput } | { ok: false; error: string } => {

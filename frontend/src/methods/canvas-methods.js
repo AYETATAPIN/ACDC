@@ -35,6 +35,7 @@ getConnectionById(id) {
     },
 
 startLabelEdit(conn, event) {
+      if (!this.accessPolicy.canWrite) return;
       this.editingConnectionLabel = { connId: conn.id };
       this.$nextTick(() => {
         if (this.$refs.labelInput && this.$refs.labelInput.focus) {
@@ -154,6 +155,10 @@ alignElementsToGrid() {
     },
 
 selectTool(toolType) {
+      if (!this.accessPolicy.canWrite && toolType !== 'select') {
+        this.currentTool = 'select';
+        return;
+      }
       this.currentTool = toolType;
       this.connectionStart = null;
       this.isConnecting = false;
@@ -342,7 +347,7 @@ handleCanvasClick(event) {
         return;
       }
 
-      if (this.currentTool === 'select' || this.currentTool === 'delete') {
+      if (this.currentTool === 'select' || this.currentTool === 'delete' || !this.accessPolicy.canWrite) {
         this.deselectAll();
         return;
       }
@@ -376,12 +381,14 @@ handleElementClick(element, event) {
 
       // 1. Connection tool has highest priority
       if (this.isConnectionTool(this.currentTool)) {
+        if (!this.accessPolicy.canWrite) return;
         this.handleConnectionTarget(element);
         return;
       }
 
       // 2. Delete tool
       if (this.currentTool === 'delete') {
+        if (!this.accessPolicy.canWrite) return;
         this.deleteElement(element);
         return;
       }
@@ -391,6 +398,7 @@ handleElementClick(element, event) {
     },
 
 deleteElement(element) {
+      if (!this.canMutateDiagram('Удаление элемента')) return;
       if (confirm(`Delete "${element.text}" and all linked connections?`)) {
         this.setConnections(this.connections.filter(
             c => c.from !== element.id && c.to !== element.id
@@ -416,6 +424,7 @@ handleConnectionMode(x, y) {
     },
 
 handleConnectionTarget(clickedElement) {
+      if (!this.accessPolicy.canWrite) return;
       if (!this.isConnectionTool(this.currentTool)) return;
 
       if (!clickedElement) {
@@ -464,6 +473,19 @@ handleMouseDown(event) {
 
       const { x, y } = this.getCanvasCoords(event);
       const element = this.getElementAtPosition(x, y);
+
+      if (!this.accessPolicy.canWrite) {
+        if (!element && !event.shiftKey && this.currentTool === 'select') {
+          this.selectionBoxStart = { x, y };
+          this.selectionBox = { x, y, width: 0, height: 0 };
+          this.deselectAll();
+          this.justInteracted = true;
+        } else if (element) {
+          this.selectElement(element, event);
+          this.justInteracted = true;
+        }
+        return;
+      }
 
       // 1. Start selection box (only when tool = select, no element under cursor, no Shift)
       if (!element && !event.shiftKey && this.currentTool === 'select') {
@@ -521,6 +543,8 @@ handleMouseDown(event) {
 
 handleMouseMove(event) {
       this.autoScrollCanvasNearPointer(event);
+
+      if (!this.accessPolicy.canWrite && !this.isPanning && !this.selectionBoxStart) return;
 
       // Drag bend point
       if (this.draggingBendPoint.connId && this.draggingBendPoint.pointIndex !== null) {
@@ -764,6 +788,7 @@ deselectAll() {
     },
 
 handleResizeMouseDown(element, event) {
+      if (!this.accessPolicy.canWrite) return;
       this.resizingElement = element;
       const coords = this.getCanvasCoords(event);
       this.resizeStart = {

@@ -10,12 +10,13 @@
           :label="tool.label"
           :severity="currentTool === tool.type ? 'primary' : 'secondary'"
           :outlined="currentTool !== tool.type"
+          :disabled="!accessPolicy.canWrite && tool.type === 'delete'"
           @click="selectTool(tool.type)"
         />
       </div>
     </section>
 
-    <section class="section">
+    <section v-if="accessPolicy.canWrite" class="section">
       <h3>Элементы</h3>
       <div class="tool-grid">
         <Button
@@ -30,7 +31,7 @@
       </div>
     </section>
 
-    <section class="section">
+    <section v-if="accessPolicy.canWrite" class="section">
       <h3>Связи</h3>
       <div class="tool-grid">
         <Button
@@ -48,7 +49,7 @@
       </Message>
     </section>
 
-    <section class="section">
+    <section v-if="accessPolicy.mode === 'owner'" class="section">
       <div class="section-header">
         <h3>Диаграммы</h3>
         <Button icon="pi pi-refresh" text rounded :loading="isLoadingList" @click="loadDiagramsList" />
@@ -109,6 +110,7 @@ export default {
     connectionsCount: { type: Number, required: true },
     isConnecting: { type: Boolean, required: true },
     isDragging: { type: Boolean, required: true },
+    accessPolicy: { type: Object, required: true },
   },
   computed: {
     diagramOptions() {

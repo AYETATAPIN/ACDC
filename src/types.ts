@@ -35,6 +35,11 @@ export interface AccessPolicy {
   canRead: boolean;
   canWrite: boolean;
   canShare: boolean;
+  mode?: 'owner' | 'shared';
+  permission?: 'owner' | 'read' | 'edit';
+  canDelete?: boolean;
+  canReplaceImport?: boolean;
+  requiresLogin?: boolean;
 }
 
 export interface Diagram {
@@ -147,6 +152,35 @@ export interface DiagramSnapshot {
   connections: DiagramConnection[];
 }
 
+export interface DiagramTypeBundle {
+  diagram_type: DiagramTypeEntity;
+  element_types: ElementTypeEntity[];
+  connection_types: ConnectionTypeEntity[];
+  rules_matrix: ConnectionRulesMatrix;
+}
+
+export interface AcdcDiagramFileV1 {
+  format: 'acdc.diagram';
+  version: 1;
+  exported_at: string;
+  diagram: Pick<Diagram, 'name' | 'type' | 'diagram_type_id' | 'svg_data'>;
+  blocks: DiagramBlock[];
+  connections: DiagramConnection[];
+  diagram_type_bundle: DiagramTypeBundle;
+}
+
+export interface DiagramImportInput {
+  mode: 'create' | 'replace';
+  target_diagram_id?: string;
+  file: AcdcDiagramFileV1;
+}
+
+export interface DiagramImportResult {
+  id: string;
+  mode: 'create' | 'replace';
+  version: number;
+}
+
 export interface User {
   id: string;
   email: string;
@@ -156,10 +190,13 @@ export interface User {
   updated_at: string;
 }
 
+export type SharePermission = 'read' | 'edit';
+
 export interface ShareToken {
   id: string;
   diagram_id: string;
-  mode: 'snapshot' | 'live';
+  permission: SharePermission;
+  mode: 'live';
   token_hash: string;
   snapshot_version?: number | null;
   revoked_at?: string | null;

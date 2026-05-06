@@ -22,6 +22,7 @@ type DiagramRow = {
   name: string;
   type: string;
   diagram_type_id: string;
+  diagram_type_version_id?: string | null;
   owner_user_id: string | null;
   svg_data: string;
   created_at: string | Date;
@@ -34,6 +35,7 @@ const mapDiagramRow = (row: DiagramRow): Diagram => ({
   name: row.name,
   type: row.type as Diagram['type'],
   diagram_type_id: row.diagram_type_id,
+  diagram_type_version_id: row.diagram_type_version_id,
   owner_user_id: row.owner_user_id,
   svg_data: row.svg_data,
   created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
@@ -266,7 +268,7 @@ export class DiagramHistoryService {
     }
 
     const res = await client.query<DiagramRow>(
-      `SELECT id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at, current_version
+      `SELECT id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data, created_at, updated_at, current_version
        FROM diagrams
        WHERE ${conditions.join(' AND ')} ${forUpdate ? 'FOR UPDATE' : ''}`,
       values,
@@ -366,15 +368,17 @@ export class DiagramHistoryService {
        SET name = $1,
            type = $2,
            diagram_type_id = $3,
-           owner_user_id = $4,
-           svg_data = $5,
-           updated_at = $6,
-           current_version = $7
-       WHERE id = $8`,
+           diagram_type_version_id = $4,
+           owner_user_id = $5,
+           svg_data = $6,
+           updated_at = $7,
+           current_version = $8
+       WHERE id = $9`,
       [
         snapshot.diagram.name,
         snapshot.diagram.type,
         snapshot.diagram.diagram_type_id,
+        snapshot.diagram.diagram_type_version_id ?? null,
         snapshot.diagram.owner_user_id ?? null,
         snapshot.diagram.svg_data,
         snapshot.diagram.updated_at,

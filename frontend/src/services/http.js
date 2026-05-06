@@ -43,7 +43,7 @@ export const apiRequest = async (path, { method = 'GET', body, headers } = {}) =
     throw new ApiError(extractMessage(payload, `HTTP ${response.status}`), {
       status: response.status,
       code: payload?.code,
-      details: payload?.details,
+      details: payload?.details ?? (typeof payload === 'object' ? payload : null),
     });
   }
 

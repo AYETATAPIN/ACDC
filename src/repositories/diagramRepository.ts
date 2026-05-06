@@ -6,6 +6,7 @@ const mapRow = (row: any): Diagram => ({
   name: row.name,
   type: row.type,
   diagram_type_id: row.diagram_type_id,
+  diagram_type_version_id: row.diagram_type_version_id,
   owner_user_id: row.owner_user_id,
   svg_data: row.svg_data,
   created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
@@ -21,7 +22,7 @@ export class DiagramRepository {
 
   async listForOwner(ownerUserId: string): Promise<Diagram[]> {
     const res = await this.pool.query(
-      `SELECT id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at
+      `SELECT id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data, created_at, updated_at
        FROM diagrams
        WHERE owner_user_id = $1
        ORDER BY created_at DESC`,
@@ -32,7 +33,7 @@ export class DiagramRepository {
 
   async getByIdForOwner(id: string, ownerUserId: string): Promise<Diagram | null> {
     const res = await this.pool.query(
-      `SELECT id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at
+      `SELECT id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data, created_at, updated_at
        FROM diagrams
        WHERE id = $1 AND owner_user_id = $2`,
       [id, ownerUserId],
@@ -43,10 +44,10 @@ export class DiagramRepository {
 
   async create(id: string, ownerUserId: string, input: DiagramCreateInput): Promise<Diagram> {
     const res = await this.pool.query(
-      `INSERT INTO diagrams (id, name, type, diagram_type_id, owner_user_id, svg_data)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at`,
-      [id, input.name, input.type, input.diagram_type_id, ownerUserId, input.svg_data],
+      `INSERT INTO diagrams (id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data, created_at, updated_at`,
+      [id, input.name, input.type, input.diagram_type_id, input.diagram_type_version_id ?? null, ownerUserId, input.svg_data],
     );
     return mapRow(res.rows[0]);
   }
@@ -68,6 +69,10 @@ export class DiagramRepository {
       fields.push(`diagram_type_id = $${idx++}`);
       values.push(input.diagram_type_id);
     }
+    if (input.diagram_type_version_id !== undefined) {
+      fields.push(`diagram_type_version_id = $${idx++}`);
+      values.push(input.diagram_type_version_id);
+    }
     if (input.svg_data !== undefined) {
       fields.push(`svg_data = $${idx++}`);
       values.push(input.svg_data);
@@ -79,7 +84,7 @@ export class DiagramRepository {
                    SET ${fields.join(', ')},
                        updated_at = NOW()
                    WHERE id = $${idx} AND owner_user_id = $${idx + 1}
-                   RETURNING id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at`;
+                   RETURNING id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data, created_at, updated_at`;
 
     values.push(id);
     values.push(ownerUserId);

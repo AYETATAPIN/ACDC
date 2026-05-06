@@ -73,6 +73,8 @@ async loadSharedDiagramState() {
         });
         this.historyEntries = data.history?.entries || [];
         this.currentVersion = data.history?.current_version || 0;
+        this.diagramTypeVersionStatus = { has_update: false };
+        this.typeVersionUpdateIssues = [];
         this.lastSavedState = {
           elements: [...this.elements],
           connections: [...this.connections],
@@ -168,6 +170,7 @@ async saveDiagram() {
           return;
         }
         await this.loadHistory();
+        await this.loadTypeVersionStatus();
         if (this.accessPolicy.mode === 'owner') {
           await this.loadDiagramsList();
         }
@@ -206,6 +209,8 @@ newDiagram() {
       this.selectedDiagramId = null;
       this.historyEntries = [];
       this.currentVersion = 0;
+      this.diagramTypeVersionStatus = null;
+      this.typeVersionUpdateIssues = [];
       this.pan = { x: 0, y: 0 };
       if (this.currentDiagramTypeId) {
         this.loadActiveDiagramTypeContext(this.currentDiagramTypeId).catch(() => {});
@@ -223,6 +228,46 @@ async loadHistory() {
         this.currentVersion = data.current_version || 0;
       } catch {
         this.historyEntries = [];
+      }
+    },
+
+async loadTypeVersionStatus() {
+      if (!this.currentDiagramId || this.accessPolicy.mode === 'shared') {
+        this.diagramTypeVersionStatus = null;
+        this.typeVersionUpdateIssues = [];
+        return;
+      }
+      try {
+        this.diagramTypeVersionStatus = await diagramsService.getTypeVersionStatus(this.currentDiagramId);
+        if (!this.diagramTypeVersionStatus?.has_update) {
+          this.typeVersionUpdateIssues = [];
+        }
+      } catch {
+        this.diagramTypeVersionStatus = null;
+      }
+    },
+
+async updateDiagramTypeVersion() {
+      if (!this.currentDiagramId || this.accessPolicy.mode === 'shared') return;
+      this.isUpdatingTypeVersion = true;
+      this.typeVersionUpdateIssues = [];
+      try {
+        await diagramsService.updateTypeVersion(this.currentDiagramId);
+        await this.loadDiagram(this.currentDiagramId);
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 409) {
+          this.typeVersionUpdateIssues = Array.isArray(error.details?.issues) ? error.details.issues : [];
+          this.diagramTypeVersionStatus = {
+            ...(this.diagramTypeVersionStatus || {}),
+            has_update: true,
+            current_version_number: error.details?.current_version_number ?? this.diagramTypeVersionStatus?.current_version_number ?? null,
+            latest_version_number: error.details?.latest_version_number ?? this.diagramTypeVersionStatus?.latest_version_number ?? null,
+          };
+          return;
+        }
+        this.showError(error.message || 'Ошибка обновления версии правил');
+      } finally {
+        this.isUpdatingTypeVersion = false;
       }
     },
 
@@ -270,6 +315,7 @@ async loadDiagram(diagramId) {
         this.localHistoryIndex = -1;
         this.pushLocalHistorySnapshot();
         await this.loadHistory();
+        await this.loadTypeVersionStatus();
       } catch (err) {
         this.showError(err.message);
       } finally {
@@ -334,6 +380,7 @@ async undoDiagram() {
           return;
         }
         await this.loadHistory();
+        await this.loadTypeVersionStatus();
       } catch (error) {
         if (error instanceof ApiError && error.status === 400 && /empty/i.test(error.message)) {
           this.showError('Нечего отменять');
@@ -386,6 +433,7 @@ async redoDiagram() {
           return;
         }
         await this.loadHistory();
+        await this.loadTypeVersionStatus();
       } catch (error) {
         if (error instanceof ApiError && error.status === 400 && /empty/i.test(error.message)) {
           this.showError('Нечего возвращать');
@@ -565,6 +613,7 @@ buildAcdcDiagramFile() {
           name: this.diagramName || 'Untitled',
           type: this.diagramType,
           diagram_type_id: diagramTypeId,
+          diagram_type_version_id: this.diagramTypeVersionStatus?.current_version_id || null,
           svg_data: this.exportToSvg(),
         },
         blocks: this.elements.map((element) => ({

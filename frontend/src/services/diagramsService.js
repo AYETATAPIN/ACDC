@@ -21,6 +21,16 @@ export const diagramsService = {
 
   remove: async (id) => apiRequest(`/diagrams/${id}`, { method: 'DELETE' }),
 
+  getTypeVersionStatus: async (diagramId) => {
+    if (isSharedContext()) return { has_update: false };
+    return apiRequest(`/diagrams/${diagramId}/type-version-status`);
+  },
+
+  updateTypeVersion: async (diagramId) => {
+    if (isSharedContext()) throw new Error('Обновление версии правил недоступно по ссылке доступа');
+    return apiRequest(`/diagrams/${diagramId}/type-version-update`, { method: 'POST' });
+  },
+
   listHistory: async (diagramId) => {
     if (isSharedContext()) {
       const history = getShareContext().history || {};

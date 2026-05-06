@@ -17,10 +17,10 @@ export const notFound = (req: Request, res: Response) => {
 
 export const errorHandler = (err: unknown, req: Request, res: Response, _next: NextFunction) => {
     if (err instanceof HttpError) {
-        return res.status(err.status).json({error: err.message, details: err.details});
+        const details = err.details && typeof err.details === 'object' && !Array.isArray(err.details) ? err.details : undefined;
+        return res.status(err.status).json({error: err.message, details: err.details, ...(details || {})});
     }
     // eslint-disable-next-line no-console
     console.error(err);
     return res.status(500).json({error: 'Internal Server Error'});
 };
-

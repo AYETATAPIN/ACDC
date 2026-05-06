@@ -53,4 +53,26 @@ export class DiagramController {
         if (!ok) return res.status(404).json({error: 'Diagram not found'});
         return res.status(200).json({success: true});
     };
+
+    getTypeVersionStatus = async (req: Request, res: Response) => {
+        const {id} = req.params;
+        const status = await this.service.getTypeVersionStatus(req.auth.userId!, id);
+        if (!status) return res.status(404).json({error: 'Diagram not found'});
+        return res.json(status);
+    };
+
+    updateTypeVersion = async (req: Request, res: Response) => {
+        const {id} = req.params;
+        const result = await this.service.updateToLatestTypeVersion(req.auth.userId!, id);
+        if (!result) return res.status(404).json({error: 'Diagram not found'});
+        if (!result.success) {
+            return res.status(409).json({
+                error: 'Diagram cannot be upgraded to the latest diagram type version',
+                current_version_number: result.current_version_number,
+                latest_version_number: result.latest_version_number,
+                issues: result.issues || [],
+            });
+        }
+        return res.json(result);
+    };
 }

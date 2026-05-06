@@ -478,7 +478,9 @@ async function getJson(path: string, cookie?: string, expectedStatus = 200) {
   const headers: Record<string, string> = {};
   if (cookie) headers.Cookie = cookie;
   const res = await fetch(baseUrl + path, { headers });
-  assert.equal(res.status, expectedStatus, `GET ${path} returned ${res.status}: ${await res.text()}`);
+  if (res.status !== expectedStatus) {
+    assert.equal(res.status, expectedStatus, `GET ${path} returned ${res.status}: ${await res.text()}`);
+  }
   if (res.headers.get('content-type')?.includes('application/json')) return res.json();
   return null;
 }
@@ -501,7 +503,9 @@ async function request(method: string, path: string, cookie?: string, body?: Rec
     headers,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  assert.equal(res.status, expectedStatus, `${method} ${path} returned ${res.status}: ${await res.text()}`);
+  if (res.status !== expectedStatus) {
+    assert.equal(res.status, expectedStatus, `${method} ${path} returned ${res.status}: ${await res.text()}`);
+  }
   if (res.headers.get('content-type')?.includes('application/json')) return res.json();
   return null;
 }

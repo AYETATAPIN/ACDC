@@ -1,5 +1,5 @@
 ﻿import { v4 as uuidv4 } from 'uuid';
-import { Diagram, DiagramCreateInput, DiagramKind, DiagramUpdateInput } from '../types.js';
+import { Diagram, DiagramCreateInput, DiagramKind, DiagramTypeUpgradeResult, DiagramTypeVersionStatus, DiagramUpdateInput } from '../types.js';
 import { DiagramRepository } from '../repositories/diagramRepository.js';
 import { DiagramBlockRepository } from '../repositories/diagramBlockRepository.js';
 import { DiagramConnectionRepository } from '../repositories/diagramConnectionRepository.js';
@@ -43,7 +43,7 @@ export class DiagramService {
   private async resolveTypeAndDiagramTypeId(
     ownerUserId: string,
     input: { type?: DiagramKind; diagram_type_id?: string },
-  ): Promise<{ type: DiagramKind; diagram_type_id: string }> {
+  ): Promise<{ type: DiagramKind; diagram_type_id: string; diagram_type_version_id: string }> {
     if (input.diagram_type_id) {
       const typeEntity = await this.diagramTypeRepo.getById(input.diagram_type_id);
       if (!typeEntity) {
@@ -53,16 +53,21 @@ export class DiagramService {
         throw new HttpError(403, 'No access to this diagram type');
       }
       const derivedType = isLegacyType(typeEntity?.key) ? (typeEntity?.key as DiagramKind) : input.type ?? 'class';
+      const version = await this.diagramTypeRepo.ensureCurrentVersion(input.diagram_type_id);
       return {
         type: input.type ?? derivedType,
         diagram_type_id: input.diagram_type_id,
+        diagram_type_version_id: version.id,
       };
     }
 
     const type = input.type ?? 'class';
+    const diagramTypeId = getBuiltinDiagramTypeIdByKind(type);
+    const version = await this.diagramTypeRepo.ensureCurrentVersion(diagramTypeId);
     return {
       type,
-      diagram_type_id: getBuiltinDiagramTypeIdByKind(type),
+      diagram_type_id: diagramTypeId,
+      diagram_type_version_id: version.id,
     };
   }
 
@@ -74,6 +79,7 @@ export class DiagramService {
       ...input,
       type: resolved.type,
       diagram_type_id: resolved.diagram_type_id,
+      diagram_type_version_id: resolved.diagram_type_version_id,
     });
 
     if (input.elements && Array.isArray(input.elements)) {
@@ -146,6 +152,7 @@ export class DiagramService {
       ...input,
       type: shouldUpdateTypeBinding ? resolved.type : undefined,
       diagram_type_id: shouldUpdateTypeBinding ? resolved.diagram_type_id : undefined,
+      diagram_type_version_id: shouldUpdateTypeBinding ? resolved.diagram_type_version_id : undefined,
     });
     if (!updated) return null;
 
@@ -218,5 +225,46 @@ export class DiagramService {
     await this.blockRepo.deleteByDiagramId(id);
     const ok = await this.repo.deleteForOwner(id, ownerUserId);
     return ok;
+  }
+
+  async getTypeVersionStatus(ownerUserId: string, id: string): Promise<DiagramTypeVersionStatus | null> {
+    const existing = await this.repo.getByIdForOwner(id, ownerUserId);
+    if (!existing) return null;
+    return this.diagramTypeRepo.getDiagramTypeVersionStatusForDiagram(id);
+  }
+
+  async updateToLatestTypeVersion(ownerUserId: string, id: string): Promise<DiagramTypeUpgradeResult | null> {
+    const existing = await this.repo.getByIdForOwner(id, ownerUserId);
+    if (!existing) return null;
+    const status = await this.diagramTypeRepo.getDiagramTypeVersionStatusForDiagram(id);
+    if (!status?.latest_version_id) {
+      throw new HttpError(400, 'Diagram type version not found');
+    }
+    if (!status.has_update) {
+      return {
+        success: true,
+        diagram_type_version_id: status.current_version_id ?? status.latest_version_id,
+        version_number: status.current_version_number ?? status.latest_version_number ?? undefined,
+      };
+    }
+
+    const issues = await this.diagramTypeRepo.validateDiagramAgainstVersion(id, status.latest_version_id);
+    if (issues.length > 0) {
+      return {
+        success: false,
+        current_version_number: status.current_version_number,
+        latest_version_number: status.latest_version_number,
+        issues,
+      };
+    }
+
+    await this.diagramTypeRepo.updateDiagramTypeVersion(id, status.latest_version_id);
+    await this.diagramTypeRepo.recalculateRuleViolationsByDiagram(id);
+    await this.historyService.recordSnapshot(id);
+    return {
+      success: true,
+      diagram_type_version_id: status.latest_version_id,
+      version_number: status.latest_version_number ?? undefined,
+    };
   }
 }

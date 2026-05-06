@@ -19,6 +19,8 @@
     <DiagramHeader
       :diagram-name="diagramName"
       :diagram-type="diagramType"
+      :current-diagram-type-id="currentDiagramTypeId"
+      :diagram-types-catalog="diagramTypesCatalog"
       :snap-to-grid="snapToGrid"
       :has-unsaved-changes="hasUnsavedChanges"
       :can-undo="canUndo"

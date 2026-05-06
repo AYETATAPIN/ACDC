@@ -899,13 +899,21 @@ const reloadCatalog = async () => {
   }
 };
 
+const emitTypeToDiagram = ({ toast = false } = {}) => {
+  if (!selectedType.value) return;
+  emit('apply-diagram-type', {
+    type: selectedType.value,
+    elements: elementTypes.value,
+    connectionTypes: connectionTypes.value,
+    rulesMatrix: matrix.value,
+  });
+  if (toast) ok('Type applied to diagram');
+};
+
 const onTypeChange = async () => {
   try {
     await loadContext();
-    // Auto-apply when user explicitly selects a type
-    if (selectedType.value) {
-      emit('apply-diagram-type', { type: selectedType.value, elements: elementTypes.value, connectionTypes: connectionTypes.value, rulesMatrix: matrix.value });
-    }
+    emitTypeToDiagram();
   } catch (e) {
     fail(e.message || 'Failed to load type');
   }
@@ -922,6 +930,7 @@ const createBlankType = async () => {
     });
     selectedDiagramTypeId.value = created.id;
     await reloadCatalog();
+    emitTypeToDiagram();
     ok('Type created');
   } catch (e) { fail(e.message || 'Failed to create type'); }
 };
@@ -933,6 +942,7 @@ const createCloneType = async () => {
     const created = await diagramTypesService.clone(typeCreateForm.cloneFromId, typeCreateForm.name.trim());
     selectedDiagramTypeId.value = created.id;
     await reloadCatalog();
+    emitTypeToDiagram();
     ok('Clone created');
   } catch (e) { fail(e.message || 'Failed to clone type'); }
 };
@@ -946,6 +956,7 @@ const updateType = async () => {
       is_free_mode: typeEditForm.is_free_mode,
     });
     await reloadCatalog();
+    emitTypeToDiagram();
     ok('Type updated');
   } catch (e) { fail(e.message || 'Failed to update type'); }
 };
@@ -956,6 +967,7 @@ const deleteType = async () => {
     await diagramTypesService.remove(selectedDiagramTypeId.value);
     selectedDiagramTypeId.value = null;
     await reloadCatalog();
+    emitTypeToDiagram();
     ok('Type deleted');
   } catch (e) { fail(e.message || 'Failed to delete type'); }
 };
@@ -981,6 +993,7 @@ const createElement = async () => {
       field_schema: normalizeFieldsForApi(),
     });
     await loadContext();
+    emitTypeToDiagram();
     resetElementForm();
     ok('Element created');
     return true;
@@ -1011,6 +1024,7 @@ const updateElement = async () => {
       field_schema: normalizeFieldsForApi(),
     });
     await loadContext();
+    emitTypeToDiagram();
     ok('Element updated');
     return true;
   } catch (e) {
@@ -1025,6 +1039,7 @@ const deleteElement = async () => {
     const previousIndex = elementTypes.value.findIndex((item) => item.id === selectedElementType.value.id);
     await diagramTypesService.deleteElement(selectedDiagramTypeId.value, selectedElementType.value.id);
     await loadContext();
+    emitTypeToDiagram();
     if (elementTypes.value.length) {
       const nextIndex = Math.min(Math.max(previousIndex, 0), elementTypes.value.length - 1);
       fillElementForm({ data: elementTypes.value[nextIndex] });
@@ -1046,6 +1061,7 @@ const createConnectionType = async () => {
   try {
     await diagramTypesService.createConnectionType(selectedDiagramTypeId.value, { ...connectionForm, name: connectionForm.name.trim() });
     await loadContext();
+    emitTypeToDiagram();
     resetConnectionForm();
     ok('Connection type created');
   } catch (e) { fail(e.message || 'Failed to create connection type'); }
@@ -1057,6 +1073,7 @@ const updateConnectionType = async () => {
   try {
     await diagramTypesService.updateConnectionType(selectedDiagramTypeId.value, selectedConnectionType.value.id, { ...connectionForm, name: connectionForm.name.trim() });
     await loadContext();
+    emitTypeToDiagram();
     ok('Connection type updated');
   } catch (e) { fail(e.message || 'Failed to update connection type'); }
 };
@@ -1066,6 +1083,7 @@ const deleteConnectionType = async () => {
   try {
     await diagramTypesService.deleteConnectionType(selectedDiagramTypeId.value, selectedConnectionType.value.id);
     await loadContext();
+    emitTypeToDiagram();
     resetConnectionForm();
     ok('Connection type deleted');
   } catch (e) { fail(e.message || 'Failed to delete connection type'); }
@@ -1121,6 +1139,7 @@ const toggleCellRule = async (fromEl, toEl, rule) => {
       }),
     );
     matrix.value = normalizeRulesMatrix(await rulesService.getMatrix(selectedDiagramTypeId.value));
+    emitTypeToDiagram();
   } catch (e) {
     fail(e.message || 'Failed to update rule');
   } finally {
@@ -1133,14 +1152,9 @@ const applyBulkRules = async () => {
   try {
     await rulesService.bulkUpdate(selectedDiagramTypeId.value, { mode: bulkForm.mode, target_id: bulkForm.target_id, connection_type_ids: asArray(bulkForm.connection_type_ids), allowed: Boolean(bulkForm.allowed) });
     matrix.value = normalizeRulesMatrix(await rulesService.getMatrix(selectedDiagramTypeId.value));
+    emitTypeToDiagram();
     ok('Bulk update applied');
   } catch (e) { fail(e.message || 'Failed to apply bulk update'); }
-};
-
-const applySelectedType = () => {
-  if (!selectedType.value) return;
-  emit('apply-diagram-type', { type: selectedType.value, elements: elementTypes.value, connectionTypes: connectionTypes.value, rulesMatrix: matrix.value });
-  ok('Type applied to diagram');
 };
 
 watch(() => visible.value, async (isOpen) => {

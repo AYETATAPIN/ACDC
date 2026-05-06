@@ -9,7 +9,7 @@
         <div class="field">
           <label>Тип</label>
           <Dropdown
-            :modelValue="diagramType"
+            :modelValue="selectedDiagramTypeValue"
             :options="typeOptions"
             optionLabel="label"
             optionValue="value"
@@ -77,6 +77,8 @@ export default {
   props: {
     diagramName: { type: String, required: true },
     diagramType: { type: String, required: true },
+    currentDiagramTypeId: { type: String, default: null },
+    diagramTypesCatalog: { type: Array, default: () => [] },
     snapToGrid: { type: Boolean, required: true },
     hasUnsavedChanges: { type: Boolean, required: true },
     canUndo: { type: Boolean, required: true },
@@ -110,7 +112,25 @@ export default {
     logout: { type: Function, required: true },
   },
   computed: {
+    selectedDiagramTypeValue() {
+      return this.currentDiagramTypeId || this.diagramType;
+    },
     typeOptions() {
+      if (Array.isArray(this.diagramTypesCatalog) && this.diagramTypesCatalog.length > 0) {
+        const builtinOrder = { class: 0, use_case: 1, activity_diagram: 2, free_mode: 3 };
+        return [...this.diagramTypesCatalog]
+          .sort((a, b) => {
+            const aOrder = Object.prototype.hasOwnProperty.call(builtinOrder, a?.key) ? builtinOrder[a.key] : 100;
+            const bOrder = Object.prototype.hasOwnProperty.call(builtinOrder, b?.key) ? builtinOrder[b.key] : 100;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return String(a?.name || '').localeCompare(String(b?.name || ''));
+          })
+          .map((item) => ({
+            label: item.name || item.key || 'Unnamed type',
+            value: item.id || item.key,
+          }));
+      }
+
       return [
         { label: 'Class', value: 'class' },
         { label: 'Use Case', value: 'use_case' },

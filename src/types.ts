@@ -147,6 +147,35 @@ export interface DiagramSnapshot {
   connections: DiagramConnection[];
 }
 
+export interface DiagramTypeBundle {
+  diagram_type: DiagramTypeEntity;
+  element_types: ElementTypeEntity[];
+  connection_types: ConnectionTypeEntity[];
+  rules_matrix: ConnectionRulesMatrix;
+}
+
+export interface AcdcDiagramFileV1 {
+  format: 'acdc.diagram';
+  version: 1;
+  exported_at: string;
+  diagram: Pick<Diagram, 'name' | 'type' | 'diagram_type_id' | 'svg_data'>;
+  blocks: DiagramBlock[];
+  connections: DiagramConnection[];
+  diagram_type_bundle: DiagramTypeBundle;
+}
+
+export interface DiagramImportInput {
+  mode: 'create' | 'replace';
+  target_diagram_id?: string;
+  file: AcdcDiagramFileV1;
+}
+
+export interface DiagramImportResult {
+  id: string;
+  mode: 'create' | 'replace';
+  version: number;
+}
+
 export interface User {
   id: string;
   email: string;

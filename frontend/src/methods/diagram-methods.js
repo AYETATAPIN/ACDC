@@ -394,6 +394,154 @@ applySnapshot(snapshot) {
       console.log('Applied elements:', this.elements.length, 'connections:', this.connections.length);
     },
 
+buildDiagramTypeBundleForExport() {
+      const matchedType = this.currentDiagramTypeEntity
+        || this.diagramTypesCatalog.find((item) => item.id === this.currentDiagramTypeId)
+        || this.diagramTypesCatalog.find((item) => item.key === this.diagramType)
+        || null;
+
+      return {
+        diagram_type: {
+          id: matchedType?.id || this.currentDiagramTypeId || this.diagramType,
+          key: matchedType?.key ?? this.diagramType,
+          name: matchedType?.name || this.diagramName || 'Imported Diagram Type',
+          description: matchedType?.description ?? null,
+          is_builtin: Boolean(matchedType?.is_builtin),
+          is_free_mode: Boolean(matchedType?.is_free_mode || this.diagramType === 'free_mode'),
+          clone_source_id: matchedType?.clone_source_id ?? null,
+          owner_user_id: matchedType?.owner_user_id ?? null,
+          metadata: matchedType?.metadata || {},
+          created_at: matchedType?.created_at || new Date().toISOString(),
+          updated_at: matchedType?.updated_at || new Date().toISOString(),
+        },
+        element_types: Array.isArray(this.customElementTypes) ? this.customElementTypes : [],
+        connection_types: Array.isArray(this.customConnectionTypes) ? this.customConnectionTypes : [],
+        rules_matrix: normalizeRulesMatrix(this.rulesMatrix),
+      };
+    },
+
+buildAcdcDiagramFile() {
+      const exportedAt = new Date().toISOString();
+      const diagramId = this.currentDiagramId || '00000000-0000-0000-0000-000000000000';
+      const diagramTypeId = this.resolveDiagramTypeIdForRequest() || this.currentDiagramTypeId || this.diagramType;
+
+      return {
+        format: 'acdc.diagram',
+        version: 1,
+        exported_at: exportedAt,
+        diagram: {
+          name: this.diagramName || 'Untitled',
+          type: this.diagramType,
+          diagram_type_id: diagramTypeId,
+          svg_data: this.exportToSvg(),
+        },
+        blocks: this.elements.map((element) => ({
+          id: element.id,
+          diagram_id: diagramId,
+          element_type_id: element.element_type_id || this.resolveElementTypeId(element) || null,
+          type: element.type,
+          x: Number(element.x) || 0,
+          y: Number(element.y) || 0,
+          width: Number(element.width) || 100,
+          height: Number(element.height) || 60,
+          properties: {
+            ...(element.properties || {}),
+            text: element.text,
+            fontSize: element.fontSize ?? 14,
+            customColor: element.customColor ?? null,
+            customBorder: element.customBorder ?? null,
+          },
+          created_at: element.created_at || exportedAt,
+          updated_at: element.updated_at || exportedAt,
+        })),
+        connections: this.connections.map((connection) => ({
+          id: connection.id,
+          diagram_id: diagramId,
+          from_block_id: connection.from,
+          to_block_id: connection.to,
+          connection_type_id: connection.connection_type_id || this.resolveConnectionTypeId(connection.type) || null,
+          type: connection.type,
+          points: connection.points || [],
+          label: connection.label || '',
+          properties: {
+            ...(connection.properties || {}),
+            customColor: connection.customColor ?? null,
+            customDash: connection.customDash ?? null,
+            labelColor: connection.labelColor ?? '#2c3e50',
+            labelFontSize: connection.labelFontSize ?? 12,
+          },
+          rule_violation: Boolean(connection.rule_violation),
+          created_at: connection.created_at || exportedAt,
+        })),
+        diagram_type_bundle: this.buildDiagramTypeBundleForExport(),
+      };
+    },
+
+exportDiagram() {
+      try {
+        const payload = this.buildAcdcDiagramFile();
+        const json = JSON.stringify(payload, null, 2);
+        const blob = new Blob([json], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const safeName = String(payload.diagram.name || 'diagram')
+          .trim()
+          .replace(/[^\w.-]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+          || 'diagram';
+        link.href = url;
+        link.download = `${safeName}.acdc.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        this.showError(error.message || 'Ошибка экспорта диаграммы');
+      }
+    },
+
+async handleImportFileSelected(file) {
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        if (!parsed || parsed.format !== 'acdc.diagram' || parsed.version !== 1) {
+          throw new Error('Неподдерживаемый формат файла диаграммы');
+        }
+        this.importDialog = {
+          visible: true,
+          file: parsed,
+          fileName: file.name,
+        };
+      } catch (error) {
+        this.showError(error.message || 'Не удалось прочитать файл импорта');
+      }
+    },
+
+async confirmImportDiagram(mode) {
+      if (!this.importDialog.file || (mode !== 'create' && mode !== 'replace')) return;
+      if (mode === 'replace' && !this.currentDiagramId) {
+        this.showError('Нет открытой диаграммы для замены');
+        return;
+      }
+
+      this.isImporting = true;
+      try {
+        const result = await diagramsService.importDiagram({
+          mode,
+          target_diagram_id: mode === 'replace' ? this.currentDiagramId : undefined,
+          file: this.importDialog.file,
+        });
+
+        this.importDialog = { visible: false, file: null, fileName: '' };
+        await this.loadDiagramsList();
+        await this.loadDiagram(result.id);
+      } catch (error) {
+        this.showError(error.message || 'Ошибка импорта диаграммы');
+      } finally {
+        this.isImporting = false;
+      }
+    },
+
 exportToSvg() {
       return `<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg"><!-- rendered elements --></svg>`
     },

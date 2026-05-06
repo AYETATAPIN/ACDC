@@ -42,6 +42,8 @@
       :toggle-grid="toggleGrid"
       :save-diagram="saveDiagram"
       :new-diagram="newDiagram"
+      :export-diagram="exportDiagram"
+      :handle-import-file-selected="handleImportFileSelected"
       :undo-diagram="undoDiagram"
       :redo-diagram="redoDiagram"
       :load-diagram="loadDiagram"
@@ -61,6 +63,25 @@
       :elements="elements"
       @apply-diagram-type="handleApplyDiagramType"
     />
+
+    <Dialog v-model:visible="importDialog.visible" modal header="Импорт диаграммы" :style="{ width: '440px' }">
+      <div class="bend-dialog-form">
+        <label>Файл</label>
+        <InputText :modelValue="importDialog.fileName" readonly />
+      </div>
+      <template #footer>
+        <Button label="Создать новую" icon="pi pi-plus" :loading="isImporting" @click="confirmImportDiagram('create')" />
+        <Button
+          label="Заменить текущую"
+          icon="pi pi-refresh"
+          severity="warning"
+          outlined
+          :disabled="!currentDiagramId"
+          :loading="isImporting"
+          @click="confirmImportDiagram('replace')"
+        />
+      </template>
+    </Dialog>
 
     <div v-if="errorMessage" class="error-toast">
       <div class="error-content">
@@ -536,4 +557,3 @@
 <script src="./app-options.js"></script>
 
 <style src="./styles/app.css"></style>
-

@@ -148,6 +148,12 @@ export default {
         pointIndex: null,
         label: '',
       },
+      importDialog: {
+        visible: false,
+        file: null,
+        fileName: '',
+      },
+      isImporting: false,
 
       localHistory: [],
       localHistoryIndex: -1,

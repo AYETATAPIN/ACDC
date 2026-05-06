@@ -10,6 +10,8 @@ export const diagramsService = {
 
   create: async (payload) => apiRequest('/diagrams', { method: 'POST', body: payload }),
 
+  importDiagram: async (payload) => apiRequest('/diagrams/import', { method: 'POST', body: payload }),
+
   update: async (id, payload) => apiRequest(`/diagrams/${id}`, { method: 'PUT', body: payload }),
 
   remove: async (id) => apiRequest(`/diagrams/${id}`, { method: 'DELETE' }),

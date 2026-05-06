@@ -111,10 +111,23 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
 
+    `CREATE TABLE IF NOT EXISTS diagrams (
+      id UUID PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('class','use_case','activity_diagram','free_mode')),
+      diagram_type_id UUID REFERENCES diagram_types(id) ON DELETE RESTRICT,
+      owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+      svg_data TEXT NOT NULL,
+      current_version INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+
     `ALTER TABLE diagrams DROP CONSTRAINT IF EXISTS diagrams_type_check`,
     `ALTER TABLE diagrams ADD CONSTRAINT diagrams_type_check CHECK (type IN ('class','use_case','free_mode','activity_diagram'))`,
     `ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS diagram_type_id UUID`,
     `ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS owner_user_id UUID`,
+    `ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS current_version INTEGER NOT NULL DEFAULT 0`,
 
     `DO $$
       BEGIN
@@ -180,6 +193,20 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
       UNIQUE(diagram_type_id, from_element_type_id, to_element_type_id, connection_type_id)
     )`,
 
+    `CREATE TABLE IF NOT EXISTS diagram_blocks (
+      id UUID PRIMARY KEY,
+      diagram_id UUID NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
+      element_type_id UUID REFERENCES element_types(id) ON DELETE SET NULL,
+      type TEXT NOT NULL,
+      x NUMERIC NOT NULL DEFAULT 0,
+      y NUMERIC NOT NULL DEFAULT 0,
+      width NUMERIC NOT NULL DEFAULT 100,
+      height NUMERIC NOT NULL DEFAULT 60,
+      properties JSONB NOT NULL DEFAULT '{}',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+
     `ALTER TABLE diagram_blocks ADD COLUMN IF NOT EXISTS element_type_id UUID`,
 
     `DO $$
@@ -190,6 +217,20 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
         END IF;
       END
     $$`,
+
+    `CREATE TABLE IF NOT EXISTS diagram_connections (
+      id UUID PRIMARY KEY,
+      diagram_id UUID NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
+      from_block_id UUID NOT NULL REFERENCES diagram_blocks(id) ON DELETE CASCADE,
+      to_block_id UUID NOT NULL REFERENCES diagram_blocks(id) ON DELETE CASCADE,
+      connection_type_id UUID REFERENCES connection_types(id) ON DELETE SET NULL,
+      type TEXT NOT NULL,
+      points JSONB NOT NULL DEFAULT '[]',
+      properties JSONB NOT NULL DEFAULT '{}',
+      label TEXT,
+      rule_violation BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
 
     `ALTER TABLE diagram_connections ADD COLUMN IF NOT EXISTS connection_type_id UUID`,
     `ALTER TABLE diagram_connections ADD COLUMN IF NOT EXISTS rule_violation BOOLEAN NOT NULL DEFAULT FALSE`,
@@ -215,11 +256,24 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
 
+    `CREATE TABLE IF NOT EXISTS diagram_history (
+      id UUID PRIMARY KEY,
+      diagram_id UUID NOT NULL REFERENCES diagrams(id) ON DELETE CASCADE,
+      version INTEGER NOT NULL,
+      state JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(diagram_id, version)
+    )`,
+
     `CREATE INDEX IF NOT EXISTS idx_diagram_types_owner ON diagram_types(owner_user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_diagrams_created_at ON diagrams(created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_element_types_diagram_type ON element_types(diagram_type_id)`,
     `CREATE INDEX IF NOT EXISTS idx_connection_types_diagram_type ON connection_types(diagram_type_id)`,
     `CREATE INDEX IF NOT EXISTS idx_connection_rules_diagram_type ON connection_rules(diagram_type_id)`,
     `CREATE INDEX IF NOT EXISTS idx_diagrams_diagram_type ON diagrams(diagram_type_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_diagram_blocks_diagram_id ON diagram_blocks(diagram_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_diagram_connections_diagram_id ON diagram_connections(diagram_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_diagram_history_diagram_version ON diagram_history(diagram_id, version)`,
     `CREATE INDEX IF NOT EXISTS idx_share_tokens_diagram ON share_tokens(diagram_id)`,
     `CREATE INDEX IF NOT EXISTS idx_user_sessions_user ON user_sessions(user_id)`,
     `CREATE INDEX IF NOT EXISTS idx_user_sessions_expires ON user_sessions(expires_at)`,

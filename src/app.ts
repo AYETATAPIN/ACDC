@@ -11,6 +11,7 @@ import { DiagramService } from './services/diagramService.js';
 import { DiagramBlockService } from './services/diagramBlockService.js';
 import { DiagramConnectionService } from './services/diagramConnectionService.js';
 import { DiagramHistoryService } from './services/diagramHistoryService.js';
+import { DiagramImportService } from './services/diagramImportService.js';
 import { DiagramTypeService } from './services/diagramTypeService.js';
 import { DiagramController } from './controllers/diagramController.js';
 import { DiagramBlockController } from './controllers/diagramBlockController.js';
@@ -61,11 +62,12 @@ export const buildApp = async () => {
   const diagramTypeService = new DiagramTypeService(diagramTypeRepo);
   const authService = new AuthService(userRepo, sessionRepo);
   const diagramService = new DiagramService(diagramRepo, blockRepo, connectionRepo, historyService, diagramTypeRepo);
+  const diagramImportService = new DiagramImportService(pool);
   const blockService = new DiagramBlockService(blockRepo, diagramRepo, historyService, diagramTypeService);
   const connectionService = new DiagramConnectionService(connectionRepo, blockRepo, diagramRepo, diagramTypeService, historyService);
 
   const authController = new AuthController(authService);
-  const diagramController = new DiagramController(diagramService);
+  const diagramController = new DiagramController(diagramService, diagramImportService);
   const blockController = new DiagramBlockController(blockService);
   const connectionController = new DiagramConnectionController(connectionService);
   const historyController = new DiagramHistoryController(historyService);

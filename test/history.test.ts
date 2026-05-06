@@ -16,12 +16,12 @@ before(async () => {
 
   try {
     await pool.query('SELECT 1');
-    await resetDb(pool);
 
     const app = await buildApp();
     server = app.listen(0);
     const addr = server.address() as AddressInfo;
     baseUrl = `http://127.0.0.1:${addr.port}`;
+    await resetDb(pool);
     dbReady = true;
   } catch (error) {
     dbReady = false;
@@ -53,20 +53,21 @@ test('undo/redo returns previous diagram states', async (t) => {
     return;
   }
 
-  const diagramId = await createDiagram('Initial Diagram', 'class', '<svg>v1</svg>');
+  const cookie = await register('history-undo-redo@example.test');
+  const diagramId = await createDiagram(cookie, 'Initial Diagram', 'class', '<svg>v1</svg>');
 
-  await updateDiagram(diagramId, { name: 'Updated Diagram', svg_data: '<svg>v2</svg>' });
+  await updateDiagram(cookie, diagramId, { name: 'Updated Diagram', svg_data: '<svg>v2</svg>' });
 
-  const history = await getHistory(diagramId);
+  const history = await getHistory(cookie, diagramId);
   assert.equal(history.current_version, 2);
   assert.equal(history.entries.length, 2);
 
-  const undo = await postJson(`/api/v1/diagrams/${diagramId}/undo`);
+  const undo = await postJson(cookie, `/api/v1/diagrams/${diagramId}/undo`);
   assert.equal(undo.version, 1);
   assert.equal(undo.state.diagram.name, 'Initial Diagram');
   assert.equal(undo.state.diagram.svg_data, '<svg>v1</svg>');
 
-  const redo = await postJson(`/api/v1/diagrams/${diagramId}/redo`);
+  const redo = await postJson(cookie, `/api/v1/diagrams/${diagramId}/redo`);
   assert.equal(redo.version, 2);
   assert.equal(redo.state.diagram.name, 'Updated Diagram');
   assert.equal(redo.state.diagram.svg_data, '<svg>v2</svg>');
@@ -78,9 +79,10 @@ test('undo after creating block clears blocks', async (t) => {
     return;
   }
 
-  const diagramId = await createDiagram('With block', 'class', '<svg/>');
+  const cookie = await register('history-block@example.test');
+  const diagramId = await createDiagram(cookie, 'With block', 'class', '<svg/>');
 
-  await postJson('/api/v1/diagram-blocks', {
+  await postJson(cookie, '/api/v1/diagram-blocks', {
     diagram_id: diagramId,
     type: 'node',
     x: 10,
@@ -90,10 +92,10 @@ test('undo after creating block clears blocks', async (t) => {
     properties: { label: 'Block' },
   });
 
-  const history = await getHistory(diagramId);
+  const history = await getHistory(cookie, diagramId);
   assert.equal(history.current_version, 2);
 
-  const undo = await postJson(`/api/v1/diagrams/${diagramId}/undo`);
+  const undo = await postJson(cookie, `/api/v1/diagrams/${diagramId}/undo`);
   assert.equal(undo.version, 1);
   assert.equal(undo.state.blocks.length, 0);
 });
@@ -103,41 +105,55 @@ async function resetDb(p: Pool) {
   await p.query('DELETE FROM diagram_connections');
   await p.query('DELETE FROM diagram_blocks');
   await p.query('DELETE FROM diagrams');
+  await p.query('DELETE FROM user_sessions');
+  await p.query('DELETE FROM users');
 }
 
-async function createDiagram(name: string, type: string, svg: string): Promise<string> {
-  const res = await postJson('/api/v1/diagrams', { name, type, svg_data: svg });
+async function register(email: string): Promise<string> {
+  const res = await fetch(baseUrl + '/api/v1/auth/register', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password: 'password123', display_name: email }),
+  });
+  if (!res.ok) throw new Error(`register failed: ${res.status} ${await res.text()}`);
+  const setCookie = res.headers.get('set-cookie');
+  if (!setCookie) throw new Error('register did not return a session cookie');
+  return setCookie.split(';')[0];
+}
+
+async function createDiagram(cookie: string, name: string, type: string, svg: string): Promise<string> {
+  const res = await postJson(cookie, '/api/v1/diagrams', { name, type, svg_data: svg });
   return res.id;
 }
 
-async function updateDiagram(id: string, body: Record<string, any>) {
-  await putJson(`/api/v1/diagrams/${id}`, body);
+async function updateDiagram(cookie: string, id: string, body: Record<string, any>) {
+  await putJson(cookie, `/api/v1/diagrams/${id}`, body);
 }
 
-async function getHistory(diagramId: string) {
-  return getJson(`/api/v1/diagrams/${diagramId}/history`);
+async function getHistory(cookie: string, diagramId: string) {
+  return getJson(cookie, `/api/v1/diagrams/${diagramId}/history`);
 }
 
-async function getJson(path: string) {
-  const res = await fetch(baseUrl + path);
+async function getJson(cookie: string, path: string) {
+  const res = await fetch(baseUrl + path, { headers: { Cookie: cookie } });
   if (!res.ok) throw new Error(`GET ${path} failed: ${res.status} ${await res.text()}`);
   return res.json();
 }
 
-async function postJson(path: string, body?: Record<string, any>) {
+async function postJson(cookie: string, path: string, body?: Record<string, any>) {
   const res = await fetch(baseUrl + path, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: body ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status} ${await res.text()}`);
   return res.json();
 }
 
-async function putJson(path: string, body: Record<string, any>) {
+async function putJson(cookie: string, path: string, body: Record<string, any>) {
   const res = await fetch(baseUrl + path, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Cookie: cookie },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`PUT ${path} failed: ${res.status} ${await res.text()}`);

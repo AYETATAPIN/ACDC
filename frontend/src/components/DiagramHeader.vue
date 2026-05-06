@@ -30,6 +30,9 @@
         <Button :label="snapToGrid ? 'Сетка: вкл' : 'Сетка: выкл'" :severity="snapToGrid ? 'success' : 'secondary'" outlined @click="toggleGrid" />
         <Button icon="pi pi-save" :label="hasUnsavedChanges ? 'Сохранить *' : 'Сохранить'" :severity="hasUnsavedChanges ? 'warning' : 'primary'" @click="saveDiagram" />
         <Button icon="pi pi-plus" label="Новая" outlined @click="newDiagram" />
+        <Button icon="pi pi-download" label="Экспорт" outlined @click="exportDiagram" />
+        <Button icon="pi pi-upload" label="Импорт" outlined @click="openImportPicker" />
+        <input ref="importInput" type="file" accept=".json,.acdc,.acdc.json,application/json" class="file-input" @change="onImportFileChange" />
         <Button icon="pi pi-undo" label="Undo" outlined :disabled="!canUndo" @click="undoDiagram" />
         <Button icon="pi pi-redo" label="Redo" outlined :disabled="!canRedo" @click="redoDiagram" />
         <Button :icon="isDarkTheme ? 'pi pi-sun' : 'pi pi-moon'" :label="isDarkTheme ? 'Светлая тема' : 'Темная тема'" outlined @click="toggleTheme" />
@@ -100,6 +103,8 @@ export default {
     toggleGrid: { type: Function, required: true },
     saveDiagram: { type: Function, required: true },
     newDiagram: { type: Function, required: true },
+    exportDiagram: { type: Function, required: true },
+    handleImportFileSelected: { type: Function, required: true },
     undoDiagram: { type: Function, required: true },
     redoDiagram: { type: Function, required: true },
     loadDiagram: { type: Function, required: true },
@@ -147,6 +152,18 @@ export default {
       this.setSelectedDiagramId(value || null);
       if (value) {
         this.loadDiagram(value);
+      }
+    },
+    openImportPicker() {
+      this.$refs.importInput?.click();
+    },
+    onImportFileChange(event) {
+      const file = event.target?.files?.[0];
+      if (file) {
+        this.handleImportFileSelected(file);
+      }
+      if (event.target) {
+        event.target.value = '';
       }
     },
   },
@@ -224,5 +241,9 @@ export default {
   color: var(--app-text, #0f172a);
   font-size: 0.86rem;
   font-weight: 600;
+}
+
+.file-input {
+  display: none;
 }
 </style>

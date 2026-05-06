@@ -7,6 +7,7 @@ export const createDiagramRouter = (controller: DiagramController) => {
     const router = Router();
 
     router.get('/', asyncHandler(controller.list));
+    router.post('/import', asyncHandler(controller.importDiagram));
     router.get('/:id', validateUUIDParam('id'), asyncHandler(controller.get));
     router.post('/', asyncHandler(controller.create));
     router.put('/:id', validateUUIDParam('id'), asyncHandler(controller.update));

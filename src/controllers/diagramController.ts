@@ -1,12 +1,15 @@
 import {Request, Response} from 'express';
 import {DiagramService} from '../services/diagramService.js';
-import {validateCreate, validateUpdate} from '../utils/validators.js';
+import {DiagramImportService} from '../services/diagramImportService.js';
+import {validateCreate, validateDiagramImport, validateUpdate} from '../utils/validators.js';
 
 export class DiagramController {
     private service: DiagramService;
+    private importService: DiagramImportService;
 
-    constructor(service: DiagramService) {
+    constructor(service: DiagramService, importService: DiagramImportService) {
         this.service = service;
+        this.importService = importService;
     }
 
     list = async (req: Request, res: Response) => {
@@ -25,6 +28,13 @@ export class DiagramController {
         const parsed = validateCreate(req.body);
         if (!parsed.ok) return res.status(400).json({error: parsed.error});
         const result = await this.service.create(req.auth.userId!, parsed.data);
+        return res.status(201).json(result);
+    };
+
+    importDiagram = async (req: Request, res: Response) => {
+        const parsed = validateDiagramImport(req.body);
+        if (!parsed.ok) return res.status(400).json({error: parsed.error});
+        const result = await this.importService.importDiagram(req.auth.userId!, parsed.data);
         return res.status(201).json(result);
     };
 

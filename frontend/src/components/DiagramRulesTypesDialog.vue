@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <Dialog
     v-model:visible="visible"
     modal
@@ -19,7 +19,6 @@
       />
       <div class="actions">
         <Button icon="pi pi-refresh" outlined label="Refresh" @click="reloadCatalog" />
-        <Button icon="pi pi-check" label="Apply To Diagram" :disabled="!selectedDiagramTypeId" @click="applySelectedType" />
       </div>
     </div>
 
@@ -444,7 +443,12 @@ const BUILTIN_DIAGRAM_TYPE_IDS = {
 };
 const SELECTED_TYPE_STORAGE_KEY = 'acdc.rulesDialog.selectedTypeId';
 
-const props = defineProps({ modelValue: Boolean, currentDiagramTypeId: { type: String, default: null } });
+const props = defineProps({
+  modelValue: Boolean,
+  currentDiagramTypeId: { type: String, default: null },
+  connections: { type: Array, default: () => [] },
+  elements: { type: Array, default: () => [] },
+});
 const emit = defineEmits(['update:modelValue', 'apply-diagram-type']);
 
 const visible = computed({ get: () => props.modelValue, set: (v) => emit('update:modelValue', v) });
@@ -895,7 +899,25 @@ const reloadCatalog = async () => {
   }
 };
 
-const onTypeChange = async () => { try { await loadContext(); } catch (e) { fail(e.message || 'Failed to load type'); } };
+const emitTypeToDiagram = ({ toast = false } = {}) => {
+  if (!selectedType.value) return;
+  emit('apply-diagram-type', {
+    type: selectedType.value,
+    elements: elementTypes.value,
+    connectionTypes: connectionTypes.value,
+    rulesMatrix: matrix.value,
+  });
+  if (toast) ok('Type applied to diagram');
+};
+
+const onTypeChange = async () => {
+  try {
+    await loadContext();
+    emitTypeToDiagram();
+  } catch (e) {
+    fail(e.message || 'Failed to load type');
+  }
+};
 
 const createBlankType = async () => {
   if (!typeCreateForm.name.trim()) return fail('Name is required');
@@ -908,6 +930,7 @@ const createBlankType = async () => {
     });
     selectedDiagramTypeId.value = created.id;
     await reloadCatalog();
+    emitTypeToDiagram();
     ok('Type created');
   } catch (e) { fail(e.message || 'Failed to create type'); }
 };
@@ -919,6 +942,7 @@ const createCloneType = async () => {
     const created = await diagramTypesService.clone(typeCreateForm.cloneFromId, typeCreateForm.name.trim());
     selectedDiagramTypeId.value = created.id;
     await reloadCatalog();
+    emitTypeToDiagram();
     ok('Clone created');
   } catch (e) { fail(e.message || 'Failed to clone type'); }
 };
@@ -932,6 +956,7 @@ const updateType = async () => {
       is_free_mode: typeEditForm.is_free_mode,
     });
     await reloadCatalog();
+    emitTypeToDiagram();
     ok('Type updated');
   } catch (e) { fail(e.message || 'Failed to update type'); }
 };
@@ -942,6 +967,7 @@ const deleteType = async () => {
     await diagramTypesService.remove(selectedDiagramTypeId.value);
     selectedDiagramTypeId.value = null;
     await reloadCatalog();
+    emitTypeToDiagram();
     ok('Type deleted');
   } catch (e) { fail(e.message || 'Failed to delete type'); }
 };
@@ -967,6 +993,7 @@ const createElement = async () => {
       field_schema: normalizeFieldsForApi(),
     });
     await loadContext();
+    emitTypeToDiagram();
     resetElementForm();
     ok('Element created');
     return true;
@@ -997,6 +1024,7 @@ const updateElement = async () => {
       field_schema: normalizeFieldsForApi(),
     });
     await loadContext();
+    emitTypeToDiagram();
     ok('Element updated');
     return true;
   } catch (e) {
@@ -1011,6 +1039,7 @@ const deleteElement = async () => {
     const previousIndex = elementTypes.value.findIndex((item) => item.id === selectedElementType.value.id);
     await diagramTypesService.deleteElement(selectedDiagramTypeId.value, selectedElementType.value.id);
     await loadContext();
+    emitTypeToDiagram();
     if (elementTypes.value.length) {
       const nextIndex = Math.min(Math.max(previousIndex, 0), elementTypes.value.length - 1);
       fillElementForm({ data: elementTypes.value[nextIndex] });
@@ -1032,6 +1061,7 @@ const createConnectionType = async () => {
   try {
     await diagramTypesService.createConnectionType(selectedDiagramTypeId.value, { ...connectionForm, name: connectionForm.name.trim() });
     await loadContext();
+    emitTypeToDiagram();
     resetConnectionForm();
     ok('Connection type created');
   } catch (e) { fail(e.message || 'Failed to create connection type'); }
@@ -1043,6 +1073,7 @@ const updateConnectionType = async () => {
   try {
     await diagramTypesService.updateConnectionType(selectedDiagramTypeId.value, selectedConnectionType.value.id, { ...connectionForm, name: connectionForm.name.trim() });
     await loadContext();
+    emitTypeToDiagram();
     ok('Connection type updated');
   } catch (e) { fail(e.message || 'Failed to update connection type'); }
 };
@@ -1052,6 +1083,7 @@ const deleteConnectionType = async () => {
   try {
     await diagramTypesService.deleteConnectionType(selectedDiagramTypeId.value, selectedConnectionType.value.id);
     await loadContext();
+    emitTypeToDiagram();
     resetConnectionForm();
     ok('Connection type deleted');
   } catch (e) { fail(e.message || 'Failed to delete connection type'); }
@@ -1061,6 +1093,32 @@ const toggleCellRule = async (fromEl, toEl, rule) => {
   if (!selectedDiagramTypeId.value || !canMutate.value) return;
   const opKey = `${fromEl.id}:${toEl.id}:${rule.connection_type_id}`;
   if (pendingRuleKey.value === opKey) return;
+
+  // If we are about to BLOCK this rule, check if existing diagram connections violate it
+  const nextAllowed = !Boolean(rule.allowed);
+  if (!nextAllowed) {
+    const violations = asArray(props.connections).filter((conn) => {
+      const fromElement = asArray(props.elements).find((e) => e.id === conn.fromId);
+      const toElement = asArray(props.elements).find((e) => e.id === conn.toId);
+      const fromTypeMatch =
+        fromElement?.element_type_id === fromEl.id ||
+        fromElement?.type === fromEl.key;
+      const toTypeMatch =
+        toElement?.element_type_id === toEl.id ||
+        toElement?.type === toEl.key;
+      const connTypeMatch =
+        conn.connection_type_id === rule.connection_type_id ||
+        conn.type === connectionById(rule.connection_type_id)?.key;
+      return fromTypeMatch && toTypeMatch && connTypeMatch;
+    });
+    if (violations.length > 0) {
+      fail(
+        `Cannot block: ${violations.length} existing connection(s) of this type already exist between these elements on the canvas. Remove them first.`,
+      );
+      return;
+    }
+  }
+
   pendingRuleKey.value = opKey;
   try {
     const rows = buildMatrixRows(matrix.value);
@@ -1068,7 +1126,7 @@ const toggleCellRule = async (fromEl, toEl, rule) => {
     const currentRules = asArray(row?.[toEl.id]).map((item) => ({ ...item }));
     const nextRules = currentRules.map((item) =>
       item.connection_type_id === rule.connection_type_id
-        ? { ...item, allowed: !Boolean(item.allowed) }
+        ? { ...item, allowed: nextAllowed }
         : item,
     );
 
@@ -1081,6 +1139,7 @@ const toggleCellRule = async (fromEl, toEl, rule) => {
       }),
     );
     matrix.value = normalizeRulesMatrix(await rulesService.getMatrix(selectedDiagramTypeId.value));
+    emitTypeToDiagram();
   } catch (e) {
     fail(e.message || 'Failed to update rule');
   } finally {
@@ -1093,14 +1152,9 @@ const applyBulkRules = async () => {
   try {
     await rulesService.bulkUpdate(selectedDiagramTypeId.value, { mode: bulkForm.mode, target_id: bulkForm.target_id, connection_type_ids: asArray(bulkForm.connection_type_ids), allowed: Boolean(bulkForm.allowed) });
     matrix.value = normalizeRulesMatrix(await rulesService.getMatrix(selectedDiagramTypeId.value));
+    emitTypeToDiagram();
     ok('Bulk update applied');
   } catch (e) { fail(e.message || 'Failed to apply bulk update'); }
-};
-
-const applySelectedType = () => {
-  if (!selectedType.value) return;
-  emit('apply-diagram-type', { type: selectedType.value, elements: elementTypes.value, connectionTypes: connectionTypes.value, rulesMatrix: matrix.value });
-  ok('Type applied to diagram');
 };
 
 watch(() => visible.value, async (isOpen) => {
@@ -1182,10 +1236,10 @@ onBeforeUnmount(() => {
 .rt-toast-stack {
   position: fixed;
   z-index: 5000;
-  right: 1.25rem;
-  top: 5.4rem;
+  right: 1.5rem;
+  bottom: 1.5rem;
   display: flex;
-  flex-direction: column;
+  flex-direction: column-reverse;
   gap: 0.55rem;
   pointer-events: none;
 }

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="app">
     <div v-if="!authReady" class="auth-loading-screen">
       <div class="auth-loading-card">Restoring session...</div>
@@ -19,6 +19,8 @@
     <DiagramHeader
       :diagram-name="diagramName"
       :diagram-type="diagramType"
+      :current-diagram-type-id="currentDiagramTypeId"
+      :diagram-types-catalog="diagramTypesCatalog"
       :snap-to-grid="snapToGrid"
       :has-unsaved-changes="hasUnsavedChanges"
       :can-undo="canUndo"
@@ -55,6 +57,8 @@
     <DiagramRulesTypesDialog
       v-model="showRulesDialog"
       :current-diagram-type-id="currentDiagramTypeId"
+      :connections="connections"
+      :elements="elements"
       @apply-diagram-type="handleApplyDiagramType"
     />
 

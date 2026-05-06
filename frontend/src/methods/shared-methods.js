@@ -101,17 +101,48 @@ setDiagramName(value) {
     },
 
 setDiagramType(value) {
-      this.diagramType = value;
-      this.queueLocalHistorySnapshot();
-      const matched = this.diagramTypesCatalog.find((item) => item.key === value);
-      if (matched) {
-        const normalizedId = this.normalizeDiagramTypeId(matched.id, matched.key);
-        this.currentDiagramTypeId = normalizedId;
-        this.currentDiagramTypeEntity = this.normalizeDiagramTypeEntity(matched);
-        this.loadActiveDiagramTypeContext(normalizedId).catch((error) => {
-          this.showError(error.message || 'Failed to load diagram type context');
-        });
+      const normalizedValue = this.normalizeDiagramTypeId(value, value);
+      const matchedById = this.diagramTypesCatalog.find(
+        (item) => this.normalizeDiagramTypeId(item.id, item.key) === normalizedValue,
+      );
+      const matchedByKey = typeof value === 'string'
+        ? this.diagramTypesCatalog.find((item) => item.key === value)
+        : null;
+      const matched = matchedById || matchedByKey;
+
+      if (!matched) {
+        if (typeof value === 'string') {
+          const builtinKey = Object.keys(BUILTIN_DIAGRAM_TYPE_IDS).find(
+            (key) => BUILTIN_DIAGRAM_TYPE_IDS[key] === value,
+          );
+          if (builtinKey) {
+            this.diagramType = builtinKey;
+            this.currentDiagramTypeId = BUILTIN_DIAGRAM_TYPE_IDS[builtinKey];
+          } else if (!this.isUuid(value)) {
+            this.diagramType = value;
+            this.currentDiagramTypeId = this.normalizeDiagramTypeId(value, value);
+          }
+        }
+        this.queueLocalHistorySnapshot();
+        this.ensureToolFitsDiagram();
+        return;
       }
+
+      const normalizedId = this.normalizeDiagramTypeId(matched.id, matched.key);
+      this.currentDiagramTypeId = normalizedId;
+      this.currentDiagramTypeEntity = this.normalizeDiagramTypeEntity(matched);
+
+      if (['class', 'use_case', 'activity_diagram', 'free_mode'].includes(matched.key)) {
+        this.diagramType = matched.key;
+      } else {
+        this.diagramType = matched.is_free_mode ? 'free_mode' : 'class';
+      }
+
+      this.queueLocalHistorySnapshot();
+      this.ensureToolFitsDiagram();
+      this.loadActiveDiagramTypeContext(normalizedId).catch((error) => {
+        this.showError(error.message || 'Failed to load diagram type context');
+      });
     },
 
 isUuid(value) {
@@ -184,16 +215,34 @@ handleApplyDiagramType(payload) {
       const type = payload?.type;
       if (!type) return;
 
-      this.currentDiagramTypeId = this.normalizeDiagramTypeId(type.id, type.key);
-      this.currentDiagramTypeEntity = this.normalizeDiagramTypeEntity(type);
+      const normalizedType = this.normalizeDiagramTypeEntity(type);
+      const normalizedTypeId = this.normalizeDiagramTypeId(normalizedType?.id, normalizedType?.key);
+
+      if (!Array.isArray(this.diagramTypesCatalog)) {
+        this.diagramTypesCatalog = [];
+      }
+      const existingIndex = this.diagramTypesCatalog.findIndex(
+        (item) => this.normalizeDiagramTypeId(item?.id, item?.key) === normalizedTypeId,
+      );
+      if (existingIndex >= 0) {
+        this.diagramTypesCatalog.splice(existingIndex, 1, {
+          ...this.diagramTypesCatalog[existingIndex],
+          ...normalizedType,
+        });
+      } else {
+        this.diagramTypesCatalog.push(normalizedType);
+      }
+
+      this.currentDiagramTypeId = normalizedTypeId;
+      this.currentDiagramTypeEntity = normalizedType;
       this.customElementTypes = Array.isArray(payload.elements) ? payload.elements : [];
       this.customConnectionTypes = Array.isArray(payload.connectionTypes) ? payload.connectionTypes : [];
       this.rulesMatrix = normalizeRulesMatrix(payload.rulesMatrix);
 
-      if (['class', 'use_case', 'activity_diagram', 'free_mode'].includes(type.key)) {
-        this.diagramType = type.key;
+      if (['class', 'use_case', 'activity_diagram', 'free_mode'].includes(normalizedType.key)) {
+        this.diagramType = normalizedType.key;
       } else {
-        this.diagramType = type.is_free_mode ? 'free_mode' : 'class';
+        this.diagramType = normalizedType.is_free_mode ? 'free_mode' : 'class';
       }
 
       this.ensureToolFitsDiagram();

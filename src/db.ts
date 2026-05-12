@@ -59,6 +59,19 @@ const toLabel = (key: string): string =>
     .map((part) => (part.length > 1 ? part[0].toUpperCase() + part.slice(1) : part.toUpperCase()))
     .join(' ');
 
+const parseJson = <T>(value: unknown, fallback: T): T => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  if (typeof value === 'object') return value as T;
+  return fallback;
+};
+
 export const getPool = (): Pool => {
   if (pool) return pool;
 
@@ -111,6 +124,15 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
 
+    `CREATE TABLE IF NOT EXISTS diagram_type_versions (
+      id UUID PRIMARY KEY,
+      diagram_type_id UUID NOT NULL REFERENCES diagram_types(id) ON DELETE CASCADE,
+      version_number INTEGER NOT NULL,
+      snapshot JSONB NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(diagram_type_id, version_number)
+    )`,
+
     `CREATE TABLE IF NOT EXISTS diagrams (
       id UUID PRIMARY KEY,
       name TEXT NOT NULL,
@@ -126,6 +148,7 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
     `ALTER TABLE diagrams DROP CONSTRAINT IF EXISTS diagrams_type_check`,
     `ALTER TABLE diagrams ADD CONSTRAINT diagrams_type_check CHECK (type IN ('class','use_case','free_mode','activity_diagram'))`,
     `ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS diagram_type_id UUID`,
+    `ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS diagram_type_version_id UUID`,
     `ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS owner_user_id UUID`,
     `ALTER TABLE diagrams ADD COLUMN IF NOT EXISTS current_version INTEGER NOT NULL DEFAULT 0`,
 
@@ -143,6 +166,15 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
         IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'diagrams_owner_user_id_fkey') THEN
           ALTER TABLE diagrams ADD CONSTRAINT diagrams_owner_user_id_fkey
           FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE SET NULL;
+        END IF;
+      END
+    $$`,
+
+    `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'diagrams_diagram_type_version_id_fkey') THEN
+          ALTER TABLE diagrams ADD CONSTRAINT diagrams_diagram_type_version_id_fkey
+          FOREIGN KEY (diagram_type_version_id) REFERENCES diagram_type_versions(id) ON DELETE SET NULL;
         END IF;
       END
     $$`,
@@ -192,6 +224,17 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
       UNIQUE(diagram_type_id, from_element_type_id, to_element_type_id, connection_type_id)
     )`,
+
+    `ALTER TABLE diagram_types ADD COLUMN IF NOT EXISTS current_version_id UUID`,
+
+    `DO $$
+      BEGIN
+        IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'diagram_types_current_version_id_fkey') THEN
+          ALTER TABLE diagram_types ADD CONSTRAINT diagram_types_current_version_id_fkey
+          FOREIGN KEY (current_version_id) REFERENCES diagram_type_versions(id) ON DELETE SET NULL;
+        END IF;
+      END
+    $$`,
 
     `CREATE TABLE IF NOT EXISTS diagram_blocks (
       id UUID PRIMARY KEY,
@@ -278,11 +321,14 @@ const runSchemaMigrations = async (p: Pool): Promise<void> => {
     )`,
 
     `CREATE INDEX IF NOT EXISTS idx_diagram_types_owner ON diagram_types(owner_user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_diagram_types_current_version ON diagram_types(current_version_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_diagram_type_versions_type ON diagram_type_versions(diagram_type_id, version_number DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_diagrams_created_at ON diagrams(created_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_element_types_diagram_type ON element_types(diagram_type_id)`,
     `CREATE INDEX IF NOT EXISTS idx_connection_types_diagram_type ON connection_types(diagram_type_id)`,
     `CREATE INDEX IF NOT EXISTS idx_connection_rules_diagram_type ON connection_rules(diagram_type_id)`,
     `CREATE INDEX IF NOT EXISTS idx_diagrams_diagram_type ON diagrams(diagram_type_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_diagrams_diagram_type_version ON diagrams(diagram_type_version_id)`,
     `CREATE INDEX IF NOT EXISTS idx_diagram_blocks_diagram_id ON diagram_blocks(diagram_id)`,
     `CREATE INDEX IF NOT EXISTS idx_diagram_connections_diagram_id ON diagram_connections(diagram_id)`,
     `CREATE INDEX IF NOT EXISTS idx_diagram_history_diagram_version ON diagram_history(diagram_id, version)`,
@@ -446,9 +492,116 @@ const seedBuiltins = async (p: Pool): Promise<void> => {
   }
 };
 
+const buildDiagramTypeVersionSnapshot = async (p: Pool, diagramTypeId: string): Promise<Record<string, any>> => {
+  const typeRes = await p.query('SELECT id, key, is_free_mode, metadata FROM diagram_types WHERE id = $1', [diagramTypeId]);
+  const type = typeRes.rows[0];
+
+  const elementsRes = await p.query(
+    `SELECT id, key, name, shape, svg_path, default_style, default_size, ports, field_schema
+     FROM element_types
+     WHERE diagram_type_id = $1
+     ORDER BY is_builtin DESC, created_at ASC`,
+    [diagramTypeId],
+  );
+  const connectionsRes = await p.query(
+    `SELECT id, key, name, color, dash, arrow_start, arrow_end, directed, default_style
+     FROM connection_types
+     WHERE diagram_type_id = $1
+     ORDER BY is_builtin DESC, created_at ASC`,
+    [diagramTypeId],
+  );
+  const rulesRes = await p.query(
+    `SELECT fe.key AS from_element_key,
+            te.key AS to_element_key,
+            ct.key AS connection_type_key,
+            r.allowed
+     FROM connection_rules r
+     JOIN element_types fe ON fe.id = r.from_element_type_id
+     JOIN element_types te ON te.id = r.to_element_type_id
+     JOIN connection_types ct ON ct.id = r.connection_type_id
+     WHERE r.diagram_type_id = $1
+     ORDER BY fe.key, te.key, ct.key`,
+    [diagramTypeId],
+  );
+
+  return {
+    diagram_type: {
+      id: type.id,
+      key: type.key,
+      is_free_mode: Boolean(type.is_free_mode),
+      metadata: parseJson<Record<string, any>>(type.metadata, {}),
+    },
+    element_types: elementsRes.rows.map((row) => ({
+      id: row.id,
+      key: row.key,
+      name: row.name,
+      shape: row.shape,
+      svg_path: row.svg_path,
+      default_style: parseJson<Record<string, any>>(row.default_style, {}),
+      default_size: parseJson<{ width: number; height: number }>(row.default_size, { width: 120, height: 60 }),
+      ports: parseJson<any[]>(row.ports, []),
+      field_schema: parseJson<any[]>(row.field_schema, []),
+    })),
+    connection_types: connectionsRes.rows.map((row) => ({
+      id: row.id,
+      key: row.key,
+      name: row.name,
+      color: row.color,
+      dash: row.dash,
+      arrow_start: row.arrow_start,
+      arrow_end: row.arrow_end,
+      directed: Boolean(row.directed),
+      default_style: parseJson<Record<string, any>>(row.default_style, {}),
+    })),
+    rules: rulesRes.rows.map((row) => ({
+      from_element_key: row.from_element_key,
+      to_element_key: row.to_element_key,
+      connection_type_key: row.connection_type_key,
+      allowed: Boolean(row.allowed),
+    })),
+  };
+};
+
+const backfillDiagramTypeVersions = async (p: Pool): Promise<void> => {
+  const typesRes = await p.query<{ id: string }>('SELECT id FROM diagram_types ORDER BY created_at ASC');
+
+  for (const row of typesRes.rows) {
+    const existing = await p.query<{ id: string }>(
+      'SELECT id FROM diagram_type_versions WHERE diagram_type_id = $1 ORDER BY version_number DESC LIMIT 1',
+      [row.id],
+    );
+
+    if (existing.rows.length === 0) {
+      const snapshot = await buildDiagramTypeVersionSnapshot(p, row.id);
+      const versionId = uuidv4();
+      await p.query(
+        `INSERT INTO diagram_type_versions (id, diagram_type_id, version_number, snapshot)
+         VALUES ($1, $2, 1, $3)`,
+        [versionId, row.id, JSON.stringify(snapshot)],
+      );
+      await p.query('UPDATE diagram_types SET current_version_id = $1 WHERE id = $2', [versionId, row.id]);
+      continue;
+    }
+
+    await p.query('UPDATE diagram_types SET current_version_id = $1 WHERE id = $2 AND current_version_id IS NULL', [
+      existing.rows[0].id,
+      row.id,
+    ]);
+  }
+
+  await p.query(
+    `UPDATE diagrams d
+     SET diagram_type_version_id = dt.current_version_id
+     FROM diagram_types dt
+     WHERE dt.id = d.diagram_type_id
+       AND d.diagram_type_version_id IS NULL`,
+  );
+};
+
 export const initDb = async (): Promise<void> => {
   const p = getPool();
   await p.query('SELECT 1');
   await runSchemaMigrations(p);
   await seedBuiltins(p);
+  await backfillDiagramTypeVersions(p);
 };

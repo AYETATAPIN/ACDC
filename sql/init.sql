@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS diagram_types (
   is_free_mode BOOLEAN NOT NULL DEFAULT FALSE,
   clone_source_id UUID REFERENCES diagram_types(id) ON DELETE SET NULL,
   owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  current_version_id UUID,
   metadata JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -31,11 +32,25 @@ VALUES
   ('00000000-0000-0000-0000-000000000104', 'free_mode', 'Free Mode', 'No restrictions', TRUE, TRUE, '{"seeded":true}')
 ON CONFLICT (id) DO NOTHING;
 
+CREATE TABLE IF NOT EXISTS diagram_type_versions (
+  id UUID PRIMARY KEY,
+  diagram_type_id UUID NOT NULL REFERENCES diagram_types(id) ON DELETE CASCADE,
+  version_number INTEGER NOT NULL,
+  snapshot JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(diagram_type_id, version_number)
+);
+
+ALTER TABLE diagram_types
+  ADD CONSTRAINT diagram_types_current_version_id_fkey
+  FOREIGN KEY (current_version_id) REFERENCES diagram_type_versions(id) ON DELETE SET NULL;
+
 CREATE TABLE IF NOT EXISTS diagrams (
   id UUID PRIMARY KEY,
   name TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('class','use_case','activity_diagram','free_mode')),
   diagram_type_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000101' REFERENCES diagram_types(id) ON DELETE RESTRICT,
+  diagram_type_version_id UUID REFERENCES diagram_type_versions(id) ON DELETE SET NULL,
   owner_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
   svg_data TEXT NOT NULL,
   current_version INTEGER NOT NULL DEFAULT 0,
@@ -45,6 +60,9 @@ CREATE TABLE IF NOT EXISTS diagrams (
 
 CREATE INDEX IF NOT EXISTS idx_diagrams_created_at ON diagrams (created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_diagrams_diagram_type_id ON diagrams (diagram_type_id);
+CREATE INDEX IF NOT EXISTS idx_diagrams_diagram_type_version_id ON diagrams (diagram_type_version_id);
+CREATE INDEX IF NOT EXISTS idx_diagram_type_versions_type ON diagram_type_versions (diagram_type_id, version_number DESC);
+CREATE INDEX IF NOT EXISTS idx_diagram_types_current_version_id ON diagram_types (current_version_id);
 
 CREATE TABLE IF NOT EXISTS element_types (
   id UUID PRIMARY KEY,

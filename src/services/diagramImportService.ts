@@ -19,6 +19,7 @@ type DiagramRow = {
   name: string;
   type: string;
   diagram_type_id: string;
+  diagram_type_version_id?: string | null;
   owner_user_id: string | null;
   svg_data: string;
   created_at: string | Date;
@@ -27,6 +28,7 @@ type DiagramRow = {
 
 type TypeResolution = {
   diagramTypeId: string;
+  diagramTypeVersionId: string;
   elementTypeIdByImportedId: Map<string, string>;
   connectionTypeIdByImportedId: Map<string, string>;
   elementTypeIdByKey: Map<string, string>;
@@ -64,6 +66,7 @@ const mapDiagramRow = (row: DiagramRow): Diagram => ({
   name: row.name,
   type: row.type as Diagram['type'],
   diagram_type_id: row.diagram_type_id,
+  diagram_type_version_id: row.diagram_type_version_id,
   owner_user_id: row.owner_user_id,
   svg_data: row.svg_data,
   created_at: toIso(row.created_at),
@@ -118,7 +121,7 @@ export class DiagramImportService {
         ? await this.prepareReplace(client, ownerUserId, input.target_diagram_id!)
         : uuidv4();
 
-      const diagramRow = await this.upsertDiagram(client, ownerUserId, diagramId, input, resolution.diagramTypeId);
+      const diagramRow = await this.upsertDiagram(client, ownerUserId, diagramId, input, resolution);
       await this.insertBlocksAndConnections(client, diagramId, input.file, resolution);
       await this.recalculateRuleViolations(client, diagramId);
       const snapshot = await this.buildSnapshot(client, diagramRow.id);
@@ -153,6 +156,11 @@ export class DiagramImportService {
     importedConnections: AcdcDiagramFileV1['diagram_type_bundle']['connection_types'],
   ): Promise<TypeResolution> {
     const diagramTypeId = BUILTIN_DIAGRAM_TYPE_IDS[typeKey];
+    const versionRes = await client.query<{ current_version_id: string | null }>('SELECT current_version_id FROM diagram_types WHERE id = $1', [
+      diagramTypeId,
+    ]);
+    const diagramTypeVersionId = versionRes.rows[0]?.current_version_id;
+    if (!diagramTypeVersionId) throw new HttpError(400, 'Diagram type version not found');
     const elementRes = await client.query<{ id: string; key: string }>('SELECT id, key FROM element_types WHERE diagram_type_id = $1', [
       diagramTypeId,
     ]);
@@ -175,7 +183,7 @@ export class DiagramImportService {
       if (resolved) connectionTypeIdByImportedId.set(item.id, resolved);
     }
 
-    return { diagramTypeId, elementTypeIdByImportedId, connectionTypeIdByImportedId, elementTypeIdByKey, connectionTypeIdByKey };
+    return { diagramTypeId, diagramTypeVersionId, elementTypeIdByImportedId, connectionTypeIdByImportedId, elementTypeIdByKey, connectionTypeIdByKey };
   }
 
   private async cloneImportedDiagramType(client: PoolClient, ownerUserId: string, file: AcdcDiagramFileV1): Promise<TypeResolution> {
@@ -254,8 +262,88 @@ export class DiagramImportService {
     }
 
     await this.insertImportedRules(client, diagramTypeId, bundle.rules_matrix, elementTypeIdByImportedId, connectionTypeIdByImportedId);
+    const diagramTypeVersionId = await this.createDiagramTypeVersion(client, diagramTypeId);
 
-    return { diagramTypeId, elementTypeIdByImportedId, connectionTypeIdByImportedId, elementTypeIdByKey, connectionTypeIdByKey };
+    return { diagramTypeId, diagramTypeVersionId, elementTypeIdByImportedId, connectionTypeIdByImportedId, elementTypeIdByKey, connectionTypeIdByKey };
+  }
+
+  private async createDiagramTypeVersion(client: PoolClient, diagramTypeId: string): Promise<string> {
+    const snapshot = await this.buildDiagramTypeVersionSnapshot(client, diagramTypeId);
+    const versionId = uuidv4();
+    await client.query(
+      `INSERT INTO diagram_type_versions (id, diagram_type_id, version_number, snapshot)
+       VALUES ($1, $2, 1, $3)`,
+      [versionId, diagramTypeId, JSON.stringify(snapshot)],
+    );
+    await client.query('UPDATE diagram_types SET current_version_id = $1 WHERE id = $2', [versionId, diagramTypeId]);
+    return versionId;
+  }
+
+  private async buildDiagramTypeVersionSnapshot(client: PoolClient, diagramTypeId: string): Promise<Record<string, any>> {
+    const typeRes = await client.query('SELECT id, key, is_free_mode, metadata FROM diagram_types WHERE id = $1', [diagramTypeId]);
+    const elementsRes = await client.query(
+      `SELECT id, key, name, shape, svg_path, default_style, default_size, ports, field_schema
+       FROM element_types
+       WHERE diagram_type_id = $1
+       ORDER BY created_at ASC`,
+      [diagramTypeId],
+    );
+    const connectionsRes = await client.query(
+      `SELECT id, key, name, color, dash, arrow_start, arrow_end, directed, default_style
+       FROM connection_types
+       WHERE diagram_type_id = $1
+       ORDER BY created_at ASC`,
+      [diagramTypeId],
+    );
+    const rulesRes = await client.query(
+      `SELECT fe.key AS from_element_key,
+              te.key AS to_element_key,
+              ct.key AS connection_type_key,
+              r.allowed
+       FROM connection_rules r
+       JOIN element_types fe ON fe.id = r.from_element_type_id
+       JOIN element_types te ON te.id = r.to_element_type_id
+       JOIN connection_types ct ON ct.id = r.connection_type_id
+       WHERE r.diagram_type_id = $1`,
+      [diagramTypeId],
+    );
+    const type = typeRes.rows[0];
+    return {
+      diagram_type: {
+        id: type.id,
+        key: type.key,
+        is_free_mode: Boolean(type.is_free_mode),
+        metadata: parseJsonObject(type.metadata),
+      },
+      element_types: elementsRes.rows.map((row) => ({
+        id: row.id,
+        key: row.key,
+        name: row.name,
+        shape: row.shape,
+        svg_path: row.svg_path,
+        default_style: parseJsonObject(row.default_style),
+        default_size: typeof row.default_size === 'object' ? row.default_size : parseJsonObject(row.default_size),
+        ports: Array.isArray(row.ports) ? row.ports : [],
+        field_schema: Array.isArray(row.field_schema) ? row.field_schema : [],
+      })),
+      connection_types: connectionsRes.rows.map((row) => ({
+        id: row.id,
+        key: row.key,
+        name: row.name,
+        color: row.color,
+        dash: row.dash,
+        arrow_start: row.arrow_start,
+        arrow_end: row.arrow_end,
+        directed: Boolean(row.directed),
+        default_style: parseJsonObject(row.default_style),
+      })),
+      rules: rulesRes.rows.map((row) => ({
+        from_element_key: row.from_element_key,
+        to_element_key: row.to_element_key,
+        connection_type_key: row.connection_type_key,
+        allowed: Boolean(row.allowed),
+      })),
+    };
   }
 
   private async insertImportedRules(
@@ -303,15 +391,23 @@ export class DiagramImportService {
     ownerUserId: string,
     diagramId: string,
     input: DiagramImportInput,
-    diagramTypeId: string,
+    resolution: TypeResolution,
   ): Promise<Diagram> {
     const file = input.file;
     if (input.mode === 'create') {
       const res = await client.query<DiagramRow>(
-        `INSERT INTO diagrams (id, name, type, diagram_type_id, owner_user_id, svg_data, current_version)
-         VALUES ($1, $2, $3, $4, $5, $6, 0)
-         RETURNING id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at`,
-        [diagramId, file.diagram.name.trim(), file.diagram.type, diagramTypeId, ownerUserId, file.diagram.svg_data || '<svg/>'],
+        `INSERT INTO diagrams (id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data, current_version)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, 0)
+         RETURNING id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data, created_at, updated_at`,
+        [
+          diagramId,
+          file.diagram.name.trim(),
+          file.diagram.type,
+          resolution.diagramTypeId,
+          resolution.diagramTypeVersionId,
+          ownerUserId,
+          file.diagram.svg_data || '<svg/>',
+        ],
       );
       return mapDiagramRow(res.rows[0]);
     }
@@ -321,12 +417,21 @@ export class DiagramImportService {
        SET name = $1,
            type = $2,
            diagram_type_id = $3,
-           svg_data = $4,
+           diagram_type_version_id = $4,
+           svg_data = $5,
            updated_at = NOW(),
            current_version = 0
-       WHERE id = $5 AND owner_user_id = $6
-       RETURNING id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at`,
-      [file.diagram.name.trim(), file.diagram.type, diagramTypeId, file.diagram.svg_data || '<svg/>', diagramId, ownerUserId],
+       WHERE id = $6 AND owner_user_id = $7
+       RETURNING id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data, created_at, updated_at`,
+      [
+        file.diagram.name.trim(),
+        file.diagram.type,
+        resolution.diagramTypeId,
+        resolution.diagramTypeVersionId,
+        file.diagram.svg_data || '<svg/>',
+        diagramId,
+        ownerUserId,
+      ],
     );
     if (res.rows.length === 0) throw new HttpError(404, 'Diagram not found');
     return mapDiagramRow(res.rows[0]);
@@ -425,7 +530,7 @@ export class DiagramImportService {
 
   private async buildSnapshot(client: PoolClient, diagramId: string): Promise<DiagramSnapshot> {
     const diagramRes = await client.query<DiagramRow>(
-      `SELECT id, name, type, diagram_type_id, owner_user_id, svg_data, created_at, updated_at
+      `SELECT id, name, type, diagram_type_id, diagram_type_version_id, owner_user_id, svg_data, created_at, updated_at
        FROM diagrams
        WHERE id = $1`,
       [diagramId],

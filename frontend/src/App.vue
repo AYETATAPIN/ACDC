@@ -108,6 +108,28 @@
       </div>
     </div>
 
+    <section v-if="diagramTypeVersionStatus?.has_update" class="type-version-banner">
+      <div class="type-version-banner-main">
+        <strong>Доступна новая версия правил</strong>
+        <span>
+          Текущая версия: {{ diagramTypeVersionStatus.current_version_number || '—' }},
+          новая версия: {{ diagramTypeVersionStatus.latest_version_number || '—' }}.
+        </span>
+      </div>
+      <Button
+        label="Обновить"
+        icon="pi pi-refresh"
+        :loading="isUpdatingTypeVersion"
+        :disabled="!accessPolicy.canWrite"
+        @click="updateDiagramTypeVersion"
+      />
+      <ul v-if="typeVersionUpdateIssues.length" class="type-version-issues">
+        <li v-for="(issue, index) in typeVersionUpdateIssues" :key="`${issue.kind}-${issue.connection_id || issue.block_id || index}`">
+          {{ issue.message }}
+        </li>
+      </ul>
+    </section>
+
     <div class="main">
       <DiagramToolbar
           :selection-tools="selectionTools"

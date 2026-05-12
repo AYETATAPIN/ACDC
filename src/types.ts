@@ -47,6 +47,7 @@ export interface Diagram {
   name: string;
   type: DiagramKind;
   diagram_type_id: string;
+  diagram_type_version_id?: string | null;
   owner_user_id?: string | null;
   svg_data: string;
   created_at: string;
@@ -57,6 +58,7 @@ export interface DiagramCreateInput {
   name: string;
   type?: DiagramKind;
   diagram_type_id?: string;
+  diagram_type_version_id?: string | null;
   svg_data: string;
 }
 
@@ -64,6 +66,7 @@ export interface DiagramUpdateInput {
   name?: string;
   type?: DiagramKind;
   diagram_type_id?: string;
+  diagram_type_version_id?: string | null;
   svg_data?: string;
 }
 
@@ -163,7 +166,7 @@ export interface AcdcDiagramFileV1 {
   format: 'acdc.diagram';
   version: 1;
   exported_at: string;
-  diagram: Pick<Diagram, 'name' | 'type' | 'diagram_type_id' | 'svg_data'>;
+  diagram: Pick<Diagram, 'name' | 'type' | 'diagram_type_id' | 'svg_data'> & { diagram_type_version_id?: string | null };
   blocks: DiagramBlock[];
   connections: DiagramConnection[];
   diagram_type_bundle: DiagramTypeBundle;
@@ -224,8 +227,73 @@ export interface DiagramTypeEntity {
   clone_source_id: string | null;
   owner_user_id: string | null;
   metadata: Record<string, any>;
+  current_version_id?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface DiagramTypeVersionRuleSnapshot {
+  from_element_key: string;
+  to_element_key: string;
+  connection_type_key: string;
+  allowed: boolean;
+}
+
+export interface DiagramTypeVersionSnapshot {
+  diagram_type: Pick<DiagramTypeEntity, 'id' | 'key' | 'is_free_mode' | 'metadata'>;
+  element_types: Array<
+    Pick<
+      ElementTypeEntity,
+      'id' | 'key' | 'name' | 'shape' | 'svg_path' | 'default_style' | 'default_size' | 'ports' | 'field_schema'
+    >
+  >;
+  connection_types: Array<
+    Pick<
+      ConnectionTypeEntity,
+      'id' | 'key' | 'name' | 'color' | 'dash' | 'arrow_start' | 'arrow_end' | 'directed' | 'default_style'
+    >
+  >;
+  rules: DiagramTypeVersionRuleSnapshot[];
+}
+
+export interface DiagramTypeVersionEntity {
+  id: string;
+  diagram_type_id: string;
+  version_number: number;
+  snapshot: DiagramTypeVersionSnapshot;
+  created_at: string;
+}
+
+export interface DiagramTypeVersionStatus {
+  diagram_type_id: string;
+  current_version_id: string | null;
+  current_version_number: number | null;
+  latest_version_id: string | null;
+  latest_version_number: number | null;
+  has_update: boolean;
+}
+
+export type DiagramTypeUpgradeIssueKind = 'unknown_element_type' | 'unknown_connection_type' | 'connection_rule_violation';
+
+export interface DiagramTypeUpgradeIssue {
+  kind: DiagramTypeUpgradeIssueKind;
+  block_id?: string;
+  connection_id?: string;
+  from_block_id?: string;
+  to_block_id?: string;
+  from_element_type?: string;
+  to_element_type?: string;
+  connection_type?: string;
+  message: string;
+}
+
+export interface DiagramTypeUpgradeResult {
+  success: boolean;
+  diagram_type_version_id?: string;
+  version_number?: number;
+  current_version_number?: number | null;
+  latest_version_number?: number | null;
+  issues?: DiagramTypeUpgradeIssue[];
 }
 
 export interface DiagramTypeCreateInput {

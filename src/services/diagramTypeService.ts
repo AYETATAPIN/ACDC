@@ -58,18 +58,25 @@ export class DiagramTypeService {
   }
 
   async create(userId: string, input: DiagramTypeCreateInput): Promise<DiagramTypeEntity> {
-    return this.repo.create({
+    const created = await this.repo.create({
       ...input,
       key: this.normalizeAutoKey(input.key, 'type'),
       is_builtin: false,
       owner_user_id: userId,
     });
+    await this.repo.createVersionFromCurrentState(created.id);
+    return (await this.repo.getById(created.id)) ?? created;
   }
 
   async update(userId: string, id: string, input: DiagramTypeUpdateInput): Promise<DiagramTypeEntity | null> {
     const existing = this.ensureMutable(await this.repo.getById(id), userId);
     if (!existing) return null;
-    return this.repo.update(id, input);
+    const updated = await this.repo.update(id, input);
+    if (updated && input.is_free_mode !== undefined && input.is_free_mode !== existing.is_free_mode) {
+      await this.repo.createVersionFromCurrentState(id);
+      return this.repo.getById(id);
+    }
+    return updated;
   }
 
   async remove(userId: string, id: string): Promise<boolean> {
@@ -81,7 +88,12 @@ export class DiagramTypeService {
   async clone(userId: string, id: string, name: string): Promise<DiagramTypeEntity | null> {
     const existing = this.ensureReadable(await this.repo.getById(id), userId);
     if (!existing) return null;
-    return this.repo.clone(id, name, userId);
+    const cloned = await this.repo.clone(id, name, userId);
+    if (cloned) {
+      await this.repo.createVersionFromCurrentState(cloned.id);
+      return this.repo.getById(cloned.id);
+    }
+    return cloned;
   }
 
   async listElements(userId: string, diagramTypeId: string): Promise<ElementTypeEntity[]> {
@@ -98,7 +110,7 @@ export class DiagramTypeService {
       key: this.normalizeAutoKey(input.key, 'element'),
       is_builtin: false,
     });
-    await this.repo.recalculateRuleViolationsByDiagramType(diagramTypeId);
+    await this.repo.createVersionFromCurrentState(diagramTypeId);
     return created;
   }
 
@@ -109,7 +121,7 @@ export class DiagramTypeService {
 
     const updated = await this.repo.updateElement(id, input);
     if (updated) {
-      await this.repo.recalculateRuleViolationsByDiagramType(updated.diagram_type_id);
+      await this.repo.createVersionFromCurrentState(updated.diagram_type_id);
     }
     return updated;
   }
@@ -121,7 +133,7 @@ export class DiagramTypeService {
 
     const ok = await this.repo.deleteElement(id);
     if (ok && existing) {
-      await this.repo.recalculateRuleViolationsByDiagramType(existing.diagram_type_id);
+      await this.repo.createVersionFromCurrentState(existing.diagram_type_id);
     }
     return ok;
   }
@@ -140,7 +152,7 @@ export class DiagramTypeService {
       key: this.normalizeAutoKey(input.key, 'connection'),
       is_builtin: false,
     });
-    await this.repo.recalculateRuleViolationsByDiagramType(diagramTypeId);
+    await this.repo.createVersionFromCurrentState(diagramTypeId);
     return created;
   }
 
@@ -151,7 +163,7 @@ export class DiagramTypeService {
 
     const updated = await this.repo.updateConnectionType(id, input);
     if (updated) {
-      await this.repo.recalculateRuleViolationsByDiagramType(updated.diagram_type_id);
+      await this.repo.createVersionFromCurrentState(updated.diagram_type_id);
     }
     return updated;
   }
@@ -163,7 +175,7 @@ export class DiagramTypeService {
 
     const ok = await this.repo.deleteConnectionType(id);
     if (ok && existing) {
-      await this.repo.recalculateRuleViolationsByDiagramType(existing.diagram_type_id);
+      await this.repo.createVersionFromCurrentState(existing.diagram_type_id);
     }
     return ok;
   }
@@ -178,23 +190,18 @@ export class DiagramTypeService {
     const type = this.ensureMutable(await this.repo.getById(diagramTypeId), userId);
     if (!type) throw new HttpError(404, 'Diagram type not found');
     await this.repo.updateRuleCell(diagramTypeId, input);
-    await this.repo.recalculateRuleViolationsByDiagramType(diagramTypeId);
+    await this.repo.createVersionFromCurrentState(diagramTypeId);
   }
 
   async bulkUpdateRules(userId: string, diagramTypeId: string, input: ConnectionRuleBulkUpdateInput): Promise<void> {
     const type = this.ensureMutable(await this.repo.getById(diagramTypeId), userId);
     if (!type) throw new HttpError(404, 'Diagram type not found');
     await this.repo.bulkUpdateRules(diagramTypeId, input);
-    await this.repo.recalculateRuleViolationsByDiagramType(diagramTypeId);
+    await this.repo.createVersionFromCurrentState(diagramTypeId);
   }
 
   async ensureConnectionAllowed(diagramId: string, fromType: string, toType: string, connectionType: string): Promise<void> {
-    const diagramTypeId = await this.repo.getDiagramTypeIdForDiagram(diagramId);
-    if (!diagramTypeId) {
-      throw new ConnectionRuleViolationError({ from: fromType, to: toType, connection_type: connectionType });
-    }
-
-    const allowed = await this.repo.resolveRuleByKeys(diagramTypeId, fromType, toType, connectionType);
+    const allowed = await this.repo.resolveRuleByKeysForDiagram(diagramId, fromType, toType, connectionType);
     if (!allowed) {
       throw new ConnectionRuleViolationError({ from: fromType, to: toType, connection_type: connectionType });
     }

@@ -4,11 +4,15 @@ import type {
   ConnectionRuleBulkUpdateInput,
   ConnectionRuleCellUpdateInput,
   ConnectionRulesMatrix,
+  DiagramTypeUpgradeIssue,
   ConnectionTypeCreateInput,
   ConnectionTypeEntity,
   ConnectionTypeUpdateInput,
   DiagramTypeCreateInput,
   DiagramTypeEntity,
+  DiagramTypeVersionEntity,
+  DiagramTypeVersionSnapshot,
+  DiagramTypeVersionStatus,
   DiagramTypeUpdateInput,
   ElementTypeCreateInput,
   ElementTypeEntity,
@@ -38,6 +42,7 @@ const mapDiagramTypeRow = (row: any): DiagramTypeEntity => ({
   clone_source_id: row.clone_source_id,
   owner_user_id: row.owner_user_id,
   metadata: parseJson<Record<string, any>>(row.metadata, {}),
+  current_version_id: row.current_version_id,
   created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
 });
@@ -72,6 +77,19 @@ const mapConnectionTypeRow = (row: any): ConnectionTypeEntity => ({
   is_builtin: Boolean(row.is_builtin),
   created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
   updated_at: row.updated_at instanceof Date ? row.updated_at.toISOString() : row.updated_at,
+});
+
+const mapDiagramTypeVersionRow = (row: any): DiagramTypeVersionEntity => ({
+  id: row.id,
+  diagram_type_id: row.diagram_type_id,
+  version_number: Number(row.version_number),
+  snapshot: parseJson<DiagramTypeVersionSnapshot>(row.snapshot, {
+    diagram_type: { id: row.diagram_type_id, key: null, is_free_mode: false, metadata: {} },
+    element_types: [],
+    connection_types: [],
+    rules: [],
+  }),
+  created_at: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
 });
 
 export class DiagramTypeRepository {
@@ -276,6 +294,283 @@ export class DiagramTypeRepository {
     } finally {
       client.release();
     }
+  }
+
+  async buildVersionSnapshot(diagramTypeId: string): Promise<DiagramTypeVersionSnapshot> {
+    const typeRes = await this.pool.query('SELECT id, key, is_free_mode, metadata FROM diagram_types WHERE id = $1', [diagramTypeId]);
+    const type = typeRes.rows[0];
+    if (!type) {
+      throw new Error('Diagram type not found');
+    }
+
+    const elements = await this.listElements(diagramTypeId);
+    const connectionTypes = await this.listConnectionTypes(diagramTypeId);
+    const rulesRes = await this.pool.query(
+      `SELECT fe.key AS from_element_key,
+              te.key AS to_element_key,
+              ct.key AS connection_type_key,
+              r.allowed
+       FROM connection_rules r
+       JOIN element_types fe ON fe.id = r.from_element_type_id
+       JOIN element_types te ON te.id = r.to_element_type_id
+       JOIN connection_types ct ON ct.id = r.connection_type_id
+       WHERE r.diagram_type_id = $1
+       ORDER BY fe.key, te.key, ct.key`,
+      [diagramTypeId],
+    );
+
+    return {
+      diagram_type: {
+        id: type.id,
+        key: type.key,
+        is_free_mode: Boolean(type.is_free_mode),
+        metadata: parseJson<Record<string, any>>(type.metadata, {}),
+      },
+      element_types: elements.map((item) => ({
+        id: item.id,
+        key: item.key,
+        name: item.name,
+        shape: item.shape,
+        svg_path: item.svg_path,
+        default_style: item.default_style,
+        default_size: item.default_size,
+        ports: item.ports,
+        field_schema: item.field_schema,
+      })),
+      connection_types: connectionTypes.map((item) => ({
+        id: item.id,
+        key: item.key,
+        name: item.name,
+        color: item.color,
+        dash: item.dash,
+        arrow_start: item.arrow_start,
+        arrow_end: item.arrow_end,
+        directed: item.directed,
+        default_style: item.default_style,
+      })),
+      rules: rulesRes.rows.map((row) => ({
+        from_element_key: row.from_element_key,
+        to_element_key: row.to_element_key,
+        connection_type_key: row.connection_type_key,
+        allowed: Boolean(row.allowed),
+      })),
+    };
+  }
+
+  async createVersionFromCurrentState(diagramTypeId: string): Promise<DiagramTypeVersionEntity> {
+    const snapshot = await this.buildVersionSnapshot(diagramTypeId);
+    const nextRes = await this.pool.query<{ next_version: number }>(
+      'SELECT COALESCE(MAX(version_number), 0) + 1 AS next_version FROM diagram_type_versions WHERE diagram_type_id = $1',
+      [diagramTypeId],
+    );
+    const versionId = uuidv4();
+    const versionNumber = Number(nextRes.rows[0]?.next_version ?? 1);
+    const res = await this.pool.query(
+      `INSERT INTO diagram_type_versions (id, diagram_type_id, version_number, snapshot)
+       VALUES ($1, $2, $3, $4)
+       RETURNING *`,
+      [versionId, diagramTypeId, versionNumber, JSON.stringify(snapshot)],
+    );
+    await this.pool.query('UPDATE diagram_types SET current_version_id = $1, updated_at = NOW() WHERE id = $2', [versionId, diagramTypeId]);
+    return mapDiagramTypeVersionRow(res.rows[0]);
+  }
+
+  async ensureCurrentVersion(diagramTypeId: string): Promise<DiagramTypeVersionEntity> {
+    const currentRes = await this.pool.query(
+      `SELECT v.*
+       FROM diagram_types dt
+       JOIN diagram_type_versions v ON v.id = dt.current_version_id
+       WHERE dt.id = $1`,
+      [diagramTypeId],
+    );
+    if (currentRes.rows[0]) {
+      return mapDiagramTypeVersionRow(currentRes.rows[0]);
+    }
+
+    const latestRes = await this.pool.query(
+      `SELECT *
+       FROM diagram_type_versions
+       WHERE diagram_type_id = $1
+       ORDER BY version_number DESC
+       LIMIT 1`,
+      [diagramTypeId],
+    );
+    if (latestRes.rows[0]) {
+      await this.pool.query('UPDATE diagram_types SET current_version_id = $1 WHERE id = $2', [latestRes.rows[0].id, diagramTypeId]);
+      return mapDiagramTypeVersionRow(latestRes.rows[0]);
+    }
+
+    return this.createVersionFromCurrentState(diagramTypeId);
+  }
+
+  async getVersionById(id: string): Promise<DiagramTypeVersionEntity | null> {
+    const res = await this.pool.query('SELECT * FROM diagram_type_versions WHERE id = $1', [id]);
+    return res.rows[0] ? mapDiagramTypeVersionRow(res.rows[0]) : null;
+  }
+
+  async pinDiagramToCurrentVersion(diagramId: string): Promise<DiagramTypeVersionEntity | null> {
+    const diagramTypeId = await this.getDiagramTypeIdForDiagram(diagramId);
+    if (!diagramTypeId) return null;
+    const version = await this.ensureCurrentVersion(diagramTypeId);
+    await this.pool.query('UPDATE diagrams SET diagram_type_version_id = $1 WHERE id = $2 AND diagram_type_version_id IS NULL', [
+      version.id,
+      diagramId,
+    ]);
+    return version;
+  }
+
+  async getDiagramTypeVersionStatusForDiagram(diagramId: string): Promise<DiagramTypeVersionStatus | null> {
+    await this.pinDiagramToCurrentVersion(diagramId);
+    const res = await this.pool.query(
+      `SELECT d.diagram_type_id,
+              cv.id AS current_version_id,
+              cv.version_number AS current_version_number,
+              lv.id AS latest_version_id,
+              lv.version_number AS latest_version_number
+       FROM diagrams d
+       LEFT JOIN diagram_type_versions cv ON cv.id = d.diagram_type_version_id
+       LEFT JOIN diagram_types dt ON dt.id = d.diagram_type_id
+       LEFT JOIN diagram_type_versions lv ON lv.id = dt.current_version_id
+       WHERE d.id = $1`,
+      [diagramId],
+    );
+    const row = res.rows[0];
+    if (!row) return null;
+    const currentVersionNumber = row.current_version_number === null ? null : Number(row.current_version_number);
+    const latestVersionNumber = row.latest_version_number === null ? null : Number(row.latest_version_number);
+    return {
+      diagram_type_id: row.diagram_type_id,
+      current_version_id: row.current_version_id,
+      current_version_number: currentVersionNumber,
+      latest_version_id: row.latest_version_id,
+      latest_version_number: latestVersionNumber,
+      has_update: Boolean(
+        row.current_version_id &&
+          row.latest_version_id &&
+          row.current_version_id !== row.latest_version_id &&
+          latestVersionNumber !== null &&
+          currentVersionNumber !== null &&
+          latestVersionNumber > currentVersionNumber,
+      ),
+    };
+  }
+
+  private isAllowedBySnapshot(
+    snapshot: DiagramTypeVersionSnapshot,
+    fromElementKey: string,
+    toElementKey: string,
+    connectionTypeKey: string,
+  ): boolean {
+    if (snapshot.diagram_type.is_free_mode) return true;
+    const hasFrom = snapshot.element_types.some((item) => item.key === fromElementKey);
+    const hasTo = snapshot.element_types.some((item) => item.key === toElementKey);
+    const hasConnection = snapshot.connection_types.some((item) => item.key === connectionTypeKey);
+    if (!hasFrom || !hasTo || !hasConnection) return false;
+    const rule = snapshot.rules.find(
+      (item) =>
+        item.from_element_key === fromElementKey &&
+        item.to_element_key === toElementKey &&
+        item.connection_type_key === connectionTypeKey,
+    );
+    return rule ? rule.allowed : true;
+  }
+
+  async resolveRuleByKeysForDiagram(
+    diagramId: string,
+    fromElementKey: string,
+    toElementKey: string,
+    connectionTypeKey: string,
+  ): Promise<boolean> {
+    await this.pinDiagramToCurrentVersion(diagramId);
+    const res = await this.pool.query(
+      `SELECT v.snapshot
+       FROM diagrams d
+       JOIN diagram_type_versions v ON v.id = d.diagram_type_version_id
+       WHERE d.id = $1`,
+      [diagramId],
+    );
+    if (!res.rows[0]) return false;
+    const snapshot = parseJson<DiagramTypeVersionSnapshot>(res.rows[0].snapshot, {
+      diagram_type: { id: '', key: null, is_free_mode: false, metadata: {} },
+      element_types: [],
+      connection_types: [],
+      rules: [],
+    });
+    return this.isAllowedBySnapshot(snapshot, fromElementKey, toElementKey, connectionTypeKey);
+  }
+
+  async validateDiagramAgainstVersion(diagramId: string, versionId: string): Promise<DiagramTypeUpgradeIssue[]> {
+    const version = await this.getVersionById(versionId);
+    if (!version) return [{ kind: 'unknown_element_type', message: 'Версия типа диаграммы не найдена' }];
+    const snapshot = version.snapshot;
+    if (snapshot.diagram_type.is_free_mode) return [];
+
+    const blocksRes = await this.pool.query<{ id: string; type: string }>('SELECT id, type FROM diagram_blocks WHERE diagram_id = $1', [
+      diagramId,
+    ]);
+    const connectionsRes = await this.pool.query<{
+      id: string;
+      from_block_id: string;
+      to_block_id: string;
+      type: string;
+      from_type: string;
+      to_type: string;
+    }>(
+      `SELECT c.id, c.from_block_id, c.to_block_id, c.type, fb.type AS from_type, tb.type AS to_type
+       FROM diagram_connections c
+       JOIN diagram_blocks fb ON fb.id = c.from_block_id
+       JOIN diagram_blocks tb ON tb.id = c.to_block_id
+       WHERE c.diagram_id = $1
+       ORDER BY c.created_at ASC, c.id ASC`,
+      [diagramId],
+    );
+    const elementKeys = new Set(snapshot.element_types.map((item) => item.key));
+    const connectionKeys = new Set(snapshot.connection_types.map((item) => item.key));
+    const issues: DiagramTypeUpgradeIssue[] = [];
+
+    for (const block of blocksRes.rows) {
+      if (!elementKeys.has(block.type)) {
+        issues.push({
+          kind: 'unknown_element_type',
+          block_id: block.id,
+          from_element_type: block.type,
+          message: `Тип элемента ${block.type} отсутствует в новой версии`,
+        });
+      }
+    }
+
+    for (const connection of connectionsRes.rows) {
+      if (!connectionKeys.has(connection.type)) {
+        issues.push({
+          kind: 'unknown_connection_type',
+          connection_id: connection.id,
+          connection_type: connection.type,
+          message: `Тип связи ${connection.type} отсутствует в новой версии`,
+        });
+        continue;
+      }
+      if (!elementKeys.has(connection.from_type) || !elementKeys.has(connection.to_type)) {
+        continue;
+      }
+      if (!this.isAllowedBySnapshot(snapshot, connection.from_type, connection.to_type, connection.type)) {
+        issues.push({
+          kind: 'connection_rule_violation',
+          connection_id: connection.id,
+          from_block_id: connection.from_block_id,
+          to_block_id: connection.to_block_id,
+          from_element_type: connection.from_type,
+          to_element_type: connection.to_type,
+          connection_type: connection.type,
+          message: `Связь ${connection.type} между ${connection.from_type} и ${connection.to_type} запрещена в версии ${version.version_number}`,
+        });
+      }
+    }
+
+    return issues;
+  }
+
+  async updateDiagramTypeVersion(diagramId: string, versionId: string): Promise<void> {
+    await this.pool.query('UPDATE diagrams SET diagram_type_version_id = $1, updated_at = NOW() WHERE id = $2', [versionId, diagramId]);
   }
 
   async listElements(diagramTypeId: string): Promise<ElementTypeEntity[]> {
@@ -620,54 +915,44 @@ export class DiagramTypeRepository {
   }
 
   async recalculateRuleViolationsByDiagramType(diagramTypeId: string): Promise<void> {
-    await this.pool.query(
-      `UPDATE diagram_connections c
-       SET rule_violation = CASE
-         WHEN dt.is_free_mode THEN FALSE
-         ELSE NOT COALESCE(r.allowed, TRUE)
-       END
-       FROM diagram_connections cx
-       JOIN diagrams d ON d.id = cx.diagram_id
-       JOIN diagram_types dt ON dt.id = d.diagram_type_id
-       JOIN diagram_blocks fb ON fb.id = cx.from_block_id
-       JOIN diagram_blocks tb ON tb.id = cx.to_block_id
-       LEFT JOIN element_types fe ON fe.diagram_type_id = d.diagram_type_id AND fe.key = fb.type
-       LEFT JOIN element_types te ON te.diagram_type_id = d.diagram_type_id AND te.key = tb.type
-       LEFT JOIN connection_types ct ON ct.diagram_type_id = d.diagram_type_id AND ct.key = cx.type
-       LEFT JOIN connection_rules r
-         ON r.diagram_type_id = d.diagram_type_id
-         AND r.from_element_type_id = fe.id
-         AND r.to_element_type_id = te.id
-         AND r.connection_type_id = ct.id
-       WHERE c.id = cx.id
-         AND d.diagram_type_id = $1`,
-      [diagramTypeId],
-    );
+    const diagramsRes = await this.pool.query<{ id: string }>('SELECT id FROM diagrams WHERE diagram_type_id = $1', [diagramTypeId]);
+    for (const row of diagramsRes.rows) {
+      await this.recalculateRuleViolationsByDiagram(row.id);
+    }
   }
 
   async recalculateRuleViolationsByDiagram(diagramId: string): Promise<void> {
-    await this.pool.query(
-      `UPDATE diagram_connections c
-       SET rule_violation = CASE
-         WHEN dt.is_free_mode THEN FALSE
-         ELSE NOT COALESCE(r.allowed, TRUE)
-       END
-       FROM diagram_connections cx
-       JOIN diagrams d ON d.id = cx.diagram_id
-       JOIN diagram_types dt ON dt.id = d.diagram_type_id
-       JOIN diagram_blocks fb ON fb.id = cx.from_block_id
-       JOIN diagram_blocks tb ON tb.id = cx.to_block_id
-       LEFT JOIN element_types fe ON fe.diagram_type_id = d.diagram_type_id AND fe.key = fb.type
-       LEFT JOIN element_types te ON te.diagram_type_id = d.diagram_type_id AND te.key = tb.type
-       LEFT JOIN connection_types ct ON ct.diagram_type_id = d.diagram_type_id AND ct.key = cx.type
-       LEFT JOIN connection_rules r
-         ON r.diagram_type_id = d.diagram_type_id
-         AND r.from_element_type_id = fe.id
-         AND r.to_element_type_id = te.id
-         AND r.connection_type_id = ct.id
-       WHERE c.id = cx.id
-         AND d.id = $1`,
+    await this.pinDiagramToCurrentVersion(diagramId);
+    const versionRes = await this.pool.query(
+      `SELECT v.snapshot
+       FROM diagrams d
+       JOIN diagram_type_versions v ON v.id = d.diagram_type_version_id
+       WHERE d.id = $1`,
       [diagramId],
     );
+    const snapshot = parseJson<DiagramTypeVersionSnapshot>(versionRes.rows[0]?.snapshot, {
+      diagram_type: { id: '', key: null, is_free_mode: false, metadata: {} },
+      element_types: [],
+      connection_types: [],
+      rules: [],
+    });
+    const connectionsRes = await this.pool.query<{
+      id: string;
+      type: string;
+      from_type: string;
+      to_type: string;
+    }>(
+      `SELECT c.id, c.type, fb.type AS from_type, tb.type AS to_type
+       FROM diagram_connections c
+       JOIN diagram_blocks fb ON fb.id = c.from_block_id
+       JOIN diagram_blocks tb ON tb.id = c.to_block_id
+       WHERE c.diagram_id = $1`,
+      [diagramId],
+    );
+
+    for (const connection of connectionsRes.rows) {
+      const allowed = this.isAllowedBySnapshot(snapshot, connection.from_type, connection.to_type, connection.type);
+      await this.pool.query('UPDATE diagram_connections SET rule_violation = $1 WHERE id = $2', [!allowed, connection.id]);
+    }
   }
 }

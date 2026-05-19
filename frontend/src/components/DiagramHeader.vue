@@ -31,8 +31,8 @@
         <Button :label="snapToGrid ? 'Сетка: вкл' : 'Сетка: выкл'" :severity="snapToGrid ? 'success' : 'secondary'" outlined @click="toggleGrid" />
         <Button icon="pi pi-save" :label="hasUnsavedChanges ? 'Сохранить *' : 'Сохранить'" :severity="hasUnsavedChanges ? 'warning' : 'primary'" :disabled="!accessPolicy.canWrite" @click="saveDiagram" />
         <Button icon="pi pi-plus" label="Новая" outlined :disabled="accessPolicy.mode !== 'owner' || !accessPolicy.canWrite" @click="newDiagram" />
-        <Button icon="pi pi-download" label="Экспорт" outlined @click="exportDiagram" />
-        <Button icon="pi pi-upload" label="Импорт" outlined :disabled="!accessPolicy.canReplaceImport" @click="openImportPicker" />
+        <Button icon="pi pi-upload" label="Экспорт" outlined @click="exportDiagram" />
+        <Button icon="pi pi-download" label="Импорт" outlined :disabled="!accessPolicy.canReplaceImport" @click="openImportPicker" />
         <input ref="importInput" type="file" accept=".json,.acdc,.acdc.json,application/json" class="file-input" @change="onImportFileChange" />
         <Button icon="pi pi-undo" label="Undo" outlined :disabled="!canUndo" @click="undoDiagram" />
         <Button icon="pi pi-redo" label="Redo" outlined :disabled="!canRedo" @click="redoDiagram" />
@@ -240,11 +240,25 @@ export default {
   margin-left: auto;
   padding: 0.25rem 0.35rem 0.25rem 0.75rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--app-panel, rgba(255, 255, 255, 0.94));
   border: 1px solid var(--app-border, #d2dbe6);
   color: var(--app-text, #0f172a);
   font-size: 0.86rem;
   font-weight: 600;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  max-width: min(340px, 100%);
+}
+
+.auth-chip span {
+  color: var(--app-text, #0f172a);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.auth-chip :deep(.p-button) {
+  color: var(--app-text, #0f172a);
 }
 
 .file-input {

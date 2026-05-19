@@ -22,15 +22,17 @@
       </div>
     </div>
 
-    <div class="rt-toast-stack" aria-live="polite">
-      <TransitionGroup name="rt-toast">
-        <div v-for="toast in toasts" :key="toast.id" class="rt-toast" :class="toast.kind">
-          <span class="rt-toast-icon" aria-hidden="true">{{ toast.kind === 'error' ? '!' : '✓' }}</span>
-          <span class="rt-toast-text">{{ toast.message }}</span>
-          <button type="button" class="rt-toast-close" @click="dismissToast(toast.id)">×</button>
-        </div>
-      </TransitionGroup>
-    </div>
+    <Teleport to="body">
+      <div v-if="visible" class="rt-toast-stack" aria-live="polite">
+        <TransitionGroup name="rt-toast">
+          <div v-for="toast in toasts" :key="`portal-${toast.id}`" class="rt-toast" :class="toast.kind">
+            <span class="rt-toast-icon" aria-hidden="true">{{ toast.kind === 'error' ? '!' : 'OK' }}</span>
+            <span class="rt-toast-text">{{ toast.message }}</span>
+            <button type="button" class="rt-toast-close" @click="dismissToast(toast.id)">x</button>
+          </div>
+        </TransitionGroup>
+      </div>
+    </Teleport>
 
     <div v-if="selectedType?.is_builtin" class="builtin-warning">
       <span class="builtin-warning-text">Built-in types are read-only. Clone this type to customize elements, connections, and rules.</span>
@@ -103,16 +105,13 @@
             >
               <Column field="name" header="Name" />
               <Column field="shape" header="Shape" />
-              <Column header="Ports">
-                <template #body="{ data }">{{ asArray(data.ports).length }}</template>
-              </Column>
             </DataTable>
           </section>
 
           <section class="card">
             <h4>Element Actions</h4>
             <small class="muted">
-              Ports are optional fixed connection points, fields are configurable labels/inputs on the block.
+              Fields are configurable labels and inputs shown inside the block.
             </small>
             <div class="actions">
               <Button label="Create Element" icon="pi pi-plus" :disabled="!canMutate" @click="openCreateElementDialog" />
@@ -133,7 +132,7 @@
                     class="preview-field preview-field-placed"
                     :style="previewFieldStyle(item.field, item.order)"
                   >
-                    {{ item.field.label || item.field.key || `Field ${item.order + 1}` }}
+                    {{ previewFieldLabel(item.field, item.order) }}
                   </div>
                 </div>
               </div>
@@ -288,7 +287,7 @@
             <div class="preview-block preview-block-editor">
               <label>Element Preview</label>
             <div ref="previewCanvasRef" class="preview-canvas">
-              <div class="preview-element" :style="previewElementStyle">
+              <div ref="previewElementRef" class="preview-element" :style="previewElementStyle">
                 <svg v-if="previewSvgPath" class="preview-custom-svg" :viewBox="previewSvgViewBox" preserveAspectRatio="none">
                   <path :d="previewSvgPath" :fill="elementForm.color || '#3498db'" :stroke="elementForm.border || '#2d83be'" stroke-width="2" />
                 </svg>
@@ -301,7 +300,7 @@
                   :style="previewFieldStyle(item.field, item.order)"
                   @pointerdown.stop.prevent="beginPreviewFieldDrag(item.index, $event)"
                 >
-                  {{ item.field.label || item.field.key || `Field ${item.order + 1}` }}
+                  {{ previewFieldLabel(item.field, item.order) }}
                 </div>
               </div>
             </div>
@@ -310,34 +309,6 @@
         </section>
 
         <section class="card editor-card">
-          <div class="builder-section">
-            <div class="builder-header">
-              <h4>Ports</h4>
-              <Button icon="pi pi-plus" label="Add Port" text @click="addPort" />
-            </div>
-            <div v-if="!elementPorts.length" class="builder-empty">No ports yet</div>
-            <div v-for="(port, idx) in elementPorts" :key="`port-editor-${idx}`" class="builder-item">
-              <div class="builder-item-head">
-                <span class="builder-index">#{{ idx + 1 }}</span>
-                <Button icon="pi pi-trash" severity="danger" text @click="removePort(idx)" />
-              </div>
-              <div class="compact-grid three">
-                <div class="compact-field">
-                  <label>X (0..1)</label>
-                  <InputNumber v-model="port.x" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" showButtons />
-                </div>
-              <div class="compact-field">
-                <label>Y (0..1)</label>
-                <InputNumber v-model="port.y" :min="0" :max="1" :minFractionDigits="2" :maxFractionDigits="2" :step="0.05" showButtons />
-              </div>
-              <div class="compact-field ports-label-field">
-                <label>Label</label>
-                <InputText v-model="port.label" placeholder="Port label" />
-              </div>
-              </div>
-            </div>
-          </div>
-
           <div class="builder-section">
             <div class="builder-header">
               <h4>Fields</h4>
@@ -376,9 +347,23 @@
                     <label>Type</label>
                     <Dropdown v-model="selectedField.type" :options="fieldTypeOptions" optionLabel="label" optionValue="value" />
                   </div>
-                  <div class="compact-field">
+                  <div class="compact-field" v-if="selectedField.type !== 'label'">
                     <label>Default Value</label>
-                    <InputText v-model="selectedField.default" placeholder="Default value" />
+                    <Textarea
+                      v-if="selectedField.type === 'list'"
+                      v-model="selectedField.default"
+                      rows="4"
+                      autoResize
+                      placeholder="One item per line"
+                    />
+                    <InputText v-else v-model="selectedField.default" placeholder="Default value" />
+                  </div>
+                </div>
+                <div class="compact-field">
+                  <label>Text Color</label>
+                  <div class="color-row">
+                    <ColorPicker format="hex" :modelValue="toPickerColor(selectedField.textColor || '#ffffff')" @update:modelValue="selectedField.textColor = toHexColor($event, '#ffffff')" />
+                    <InputText v-model="selectedField.textColor" placeholder="#ffffff" />
                   </div>
                 </div>
                 <div class="compact-grid two">
@@ -475,10 +460,10 @@ const elementForm = reactive({
   color: '#3498db',
   border: '#2d83be',
 });
-const elementPorts = ref([]);
 const elementFields = ref([]);
 const selectedFieldIndex = ref(-1);
 const previewCanvasRef = ref(null);
+const previewElementRef = ref(null);
 const svgFileInputRef = ref(null);
 const svgDropActive = ref(false);
 const previewDrag = reactive({
@@ -496,7 +481,7 @@ const bulkForm = reactive({ mode: 'row', target_id: null, connection_type_ids: [
 const pendingRuleKey = ref('');
 
 const shapeOptions = [{ label: 'Rect', value: 'rect' }, { label: 'RoundRect', value: 'roundrect' }, { label: 'Ellipse', value: 'ellipse' }, { label: 'Diamond', value: 'diamond' }, { label: 'Circle', value: 'circle' }, { label: 'Cylinder', value: 'cylinder' }, { label: 'Actor', value: 'actor' }, { label: 'Custom', value: 'custom' }];
-const fieldTypeOptions = [{ label: 'Text', value: 'text' }, { label: 'Number', value: 'number' }, { label: 'Select', value: 'select' }, { label: 'Checkbox', value: 'checkbox' }];
+const fieldTypeOptions = [{ label: 'Input', value: 'input' }, { label: 'List', value: 'list' }, { label: 'Label', value: 'label' }];
 const arrowOptions = [{ label: 'None', value: 'none' }, { label: 'Arrow', value: 'arrow' }, { label: 'Empty Arrow', value: 'empty_arrow' }, { label: 'Filled Diamond', value: 'filled_diamond' }, { label: 'Empty Diamond', value: 'empty_diamond' }];
 const allowOptions = [{ label: 'Allowed', value: true }, { label: 'Blocked', value: false }];
 const bulkModes = [{ label: 'By Row', value: 'row' }, { label: 'By Column', value: 'column' }, { label: 'By Connection Type', value: 'connection_type' }];
@@ -517,6 +502,27 @@ const selectedField = computed(() => {
   if (selectedFieldIndex.value < 0) return null;
   return elementFields.value[selectedFieldIndex.value] || null;
 });
+watch(
+  () => selectedField.value?.type,
+  (type) => {
+    const field = selectedField.value;
+    if (!field) return;
+    const normalizedType = normalizeFieldType(type);
+    const index = Math.max(0, selectedFieldIndex.value);
+    const shouldRename = !String(field.label || '').trim() || isGeneratedFieldLabel(field.label);
+    field.type = normalizedType;
+    if (shouldRename) {
+      field.label = `${fieldTypeLabel(normalizedType)} ${index + 1}`;
+    }
+    if (normalizedType === 'list') {
+      field.default = listItemsToText(field.default);
+    } else if (normalizedType === 'label') {
+      field.default = '';
+    } else if (Array.isArray(field.default)) {
+      field.default = field.default.join('\n');
+    }
+  },
+);
 const previewShapeData = computed(() => (elementForm.shape === 'custom' ? parseCustomShapeData(String(elementForm.svg_path || '')) : parseCustomShapeData('')));
 const previewSvgPath = computed(() => previewShapeData.value.d);
 const previewSvgViewBox = computed(() => previewShapeData.value.viewBox);
@@ -549,7 +555,15 @@ const previewFieldStyle = (field, idx) => {
   return {
     left: `${(x * 100).toFixed(1)}%`,
     top: `${(y * 100).toFixed(1)}%`,
+    color: normalizeHexColor(field?.textColor, '#ffffff'),
   };
+};
+const previewFieldLabel = (field, idx) => {
+  const label = String(field?.label || field?.key || `Field ${idx + 1}`).trim();
+  if (String(field?.type || '').toLowerCase() === 'list') {
+    return `> ${label} (${normalizeListItems(field?.default).length})`;
+  }
+  return label;
 };
 
 const asArray = (x) => (Array.isArray(x) ? x : []);
@@ -610,34 +624,44 @@ const ok = (msg) => pushToast('success', msg, 2400);
 const clamp01 = (v) => Math.max(0, Math.min(1, Number(v) || 0));
 const toOptionsCsv = (options) => asArray(options).join(', ');
 const fromOptionsCsv = (csv) => String(csv || '').split(',').map((x) => x.trim()).filter(Boolean);
-const makePort = () => ({ x: 0.5, y: 0.5, label: '' });
-const makeField = (idx = 1) => ({
-  type: 'text',
-  label: `Field ${idx}`,
+const normalizeFieldType = (value) => {
+  const type = String(value || 'input').toLowerCase();
+  if (['text', 'number', 'select', 'checkbox'].includes(type)) return 'input';
+  return fieldTypeOptions.some((item) => item.value === type) ? type : 'input';
+};
+const fieldTypeLabel = (type) => fieldTypeOptions.find((item) => item.value === normalizeFieldType(type))?.label || 'Input';
+const isGeneratedFieldLabel = (value) => /^(field|input|list|label)\s+\d+$/i.test(String(value || '').trim());
+const normalizeListItems = (value) => {
+  if (Array.isArray(value)) return value.map((x) => String(x ?? '').trim()).filter(Boolean);
+  if (typeof value === 'string') return value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean);
+  return [];
+};
+const listItemsToText = (value) => normalizeListItems(value).join('\n');
+const makeField = (idx = 1, type = 'input') => ({
+  type: normalizeFieldType(type),
+  label: `${fieldTypeLabel(type)} ${idx}`,
   key: generateClientKey('field'),
   required: false,
   default: '',
   visibleOnBlock: true,
+  textColor: '#ffffff',
   x: 0.5,
   y: Math.min(0.9, 0.22 + (idx - 1) * 0.16),
   optionsCsv: '',
 });
-const normalizePortsForApi = () =>
-  elementPorts.value.map((port) => ({ x: clamp01(port.x), y: clamp01(port.y), ...(String(port.label || '').trim() ? { label: String(port.label).trim() } : {}) }));
 const normalizeFieldsForApi = () =>
   elementFields.value.map((field, index) => ({
     key: String(field.key || '').trim() || generateClientKey(`field${index + 1}`),
-    type: field.type || 'text',
+    type: normalizeFieldType(field.type),
     label: String(field.label || '').trim(),
     required: Boolean(field.required),
-    default: field.default ?? '',
+    default: normalizeFieldType(field.type) === 'list' ? normalizeListItems(field.default) : field.default ?? '',
     visibleOnBlock: field.visibleOnBlock !== false,
+    textColor: normalizeHexColor(field.textColor, '#ffffff'),
     x: clamp01(field.x),
     y: clamp01(field.y),
-    options: field.type === 'select' ? fromOptionsCsv(field.optionsCsv) : [],
+    options: [],
   }));
-const addPort = () => elementPorts.value.push(makePort());
-const removePort = (idx) => elementPorts.value.splice(idx, 1);
 const selectField = (idx) => {
   if (idx < 0 || idx >= elementFields.value.length) {
     selectedFieldIndex.value = -1;
@@ -664,7 +688,7 @@ const removeField = (idx) => {
 };
 const beginPreviewFieldDrag = (fieldIndex, event) => {
   if (event.button !== 0) return;
-  const canvas = previewCanvasRef.value;
+  const canvas = previewElementRef.value || previewCanvasRef.value;
   const field = elementFields.value[fieldIndex];
   if (!canvas || !field) return;
   const rect = canvas.getBoundingClientRect();
@@ -702,11 +726,17 @@ const finishPreviewFieldDrag = () => {
   window.removeEventListener('pointerup', finishPreviewFieldDrag);
   window.removeEventListener('pointercancel', finishPreviewFieldDrag);
 };
-const toHexColor = (value) => {
-  if (typeof value !== 'string') return '#000000';
-  return value.startsWith('#') ? value : `#${value}`;
+const normalizeHexColor = (value, fallback = '#000000') => {
+  const source = String(value || '').trim().replace(/^#/, '');
+  if (/^[0-9a-fA-F]{6}$/.test(source)) return `#${source.toLowerCase()}`;
+  if (/^[0-9a-fA-F]{3}$/.test(source)) {
+    const expanded = source.split('').map((ch) => `${ch}${ch}`).join('');
+    return `#${expanded.toLowerCase()}`;
+  }
+  return fallback;
 };
-const toPickerColor = (value) => String(value || '#3498db').replace('#', '');
+const toHexColor = (value, fallback = '#000000') => normalizeHexColor(value, fallback);
+const toPickerColor = (value, fallback = '#3498db') => normalizeHexColor(value, fallback).replace('#', '');
 const validateSvgInput = () => {
   if (elementForm.shape !== 'custom') return true;
   const shapeData = parseCustomShapeData(String(elementForm.svg_path || ''));
@@ -777,7 +807,6 @@ const resetElementForm = () => {
     color: '#3498db',
     border: '#2d83be',
   });
-  elementPorts.value = [];
   elementFields.value = [];
   selectedFieldIndex.value = -1;
 };
@@ -803,22 +832,21 @@ const fillElementForm = ({ data }) => {
     color: data.default_style?.color || '#3498db',
     border: data.default_style?.border || '#2d83be',
   });
-  elementPorts.value = asArray(data.ports).map((port) => ({
-    x: clamp01(port?.x),
-    y: clamp01(port?.y),
-    label: String(port?.label || ''),
-  }));
-  elementFields.value = asArray(data.field_schema).map((field, idx) => ({
-    type: field?.type || 'text',
-    label: String(field?.label || ''),
-    key: String(field?.key || `field_${idx + 1}`),
-    required: Boolean(field?.required),
-    default: field?.default ?? '',
-    visibleOnBlock: field?.visibleOnBlock !== false,
-    x: clamp01(field?.x ?? 0.5),
-    y: clamp01(field?.y ?? Math.min(0.9, 0.22 + idx * 0.16)),
-    optionsCsv: toOptionsCsv(field?.options),
-  }));
+  elementFields.value = asArray(data.field_schema).map((field, idx) => {
+    const type = normalizeFieldType(field?.type);
+    return {
+      type,
+      label: String(field?.label || ''),
+      key: String(field?.key || `field_${idx + 1}`),
+      required: Boolean(field?.required),
+      default: type === 'list' ? listItemsToText(field?.default) : field?.default ?? '',
+      visibleOnBlock: field?.visibleOnBlock !== false,
+      textColor: normalizeHexColor(field?.textColor, '#ffffff'),
+      x: clamp01(field?.x ?? 0.5),
+      y: clamp01(field?.y ?? Math.min(0.9, 0.22 + idx * 0.16)),
+      optionsCsv: toOptionsCsv(field?.options),
+    };
+  });
   selectedFieldIndex.value = elementFields.value.length ? 0 : -1;
 };
 
@@ -992,7 +1020,7 @@ const createElement = async () => {
       svg_path: elementForm.shape === 'custom' ? String(elementForm.svg_path || '').trim() : null,
       default_style: { color: elementForm.color, border: elementForm.border },
       default_size: { width: elementForm.width, height: elementForm.height },
-      ports: normalizePortsForApi(),
+      ports: [],
       field_schema: normalizeFieldsForApi(),
     });
     await loadContext();
@@ -1023,7 +1051,7 @@ const updateElement = async () => {
       svg_path: elementForm.shape === 'custom' ? String(elementForm.svg_path || '').trim() : null,
       default_style: { color: elementForm.color, border: elementForm.border },
       default_size: { width: elementForm.width, height: elementForm.height },
-      ports: normalizePortsForApi(),
+      ports: [],
       field_schema: normalizeFieldsForApi(),
     });
     await loadContext();
@@ -1054,6 +1082,10 @@ const deleteElement = async () => {
 };
 
 const submitElementEditor = async () => {
+  if (!String(elementForm.name || '').trim()) {
+    fail('Element name is required');
+    return;
+  }
   const success = elementEditor.mode === 'edit' ? await updateElement() : await createElement();
   if (success) elementEditor.visible = false;
 };
@@ -1238,7 +1270,7 @@ onBeforeUnmount(() => {
 }
 .rt-toast-stack {
   position: fixed;
-  z-index: 5000;
+  z-index: 22000;
   right: 1.5rem;
   bottom: 1.5rem;
   display: flex;
@@ -1439,6 +1471,7 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.65rem;
+  height: 100%;
 }
 .builder-header {
   display: flex;
@@ -1489,7 +1522,10 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 230px minmax(0, 1fr);
   gap: 0.75rem;
-  min-height: 260px;
+  min-height: 0;
+  flex: 1 1 auto;
+  height: 100%;
+  align-items: stretch;
 }
 .fields-list {
   border: 1px solid var(--rt-border);
@@ -1500,6 +1536,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 0.4rem;
   overflow: auto;
+  min-height: 0;
 }
 .field-chip {
   appearance: none;
@@ -1537,9 +1574,12 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-height: 0;
+  overflow: auto;
 }
 .field-editor-empty {
-  min-height: 150px;
+  min-height: 0;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1577,9 +1617,16 @@ onBeforeUnmount(() => {
   padding: 0.5rem 0.7rem;
   background: var(--rt-surface-soft);
 }
-.editor-grid { display: grid; grid-template-columns: minmax(520px, 1fr) minmax(520px, 1fr); gap: 1rem; align-items: start; }
+.editor-grid { display: grid; grid-template-columns: minmax(520px, 1fr) minmax(520px, 1fr); gap: 1rem; align-items: stretch; grid-auto-rows: 1fr; }
 .editor-card {
   min-height: 52vh;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.editor-card > .builder-section {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 .color-row { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem; align-items: center; }
 .preview-block-editor {
@@ -1710,10 +1757,6 @@ onBeforeUnmount(() => {
   padding-bottom: 1rem;
 }
 
-.ports-label-field {
-  grid-column: 1 / -1;
-}
-
 .rules-dialog :deep(.p-inputtext),
 .rules-dialog :deep(.p-inputnumber-input),
 .rules-dialog :deep(.p-dropdown),
@@ -1795,7 +1838,6 @@ html[data-theme='dark'] .p-dialog.rules-dialog .rt-toast {
   .matrix-only-card { min-height: 70vh; }
   .connection-types-grid { grid-template-columns: 1fr; }
   .compact-grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ports-label-field { grid-column: 1 / -1; }
   .fields-layout { grid-template-columns: 1fr; min-height: 0; }
   .fields-list { max-height: 180px; }
 }
@@ -1805,3 +1847,4 @@ html[data-theme='dark'] .p-dialog.rules-dialog .rt-toast {
   .compact-grid.three { grid-template-columns: 1fr; }
 }
 </style>
+

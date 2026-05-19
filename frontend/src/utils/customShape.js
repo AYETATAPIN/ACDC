@@ -297,6 +297,26 @@ export const isPointInsideCustomShape = (shapeData, xRatio, yRatio) => {
   return true;
 };
 
+export const isPointNearCustomShapeStroke = (shapeData, xRatio, yRatio, toleranceRatio = 0.012) => {
+  const geometry = ensureGeometry(shapeData);
+  if (!geometry) return false;
+  if (xRatio < 0 || xRatio > 1 || yRatio < 0 || yRatio > 1) return false;
+  const samples = getSamples(geometry);
+  if (!samples.length) return false;
+
+  const { viewBoxData } = geometry.parsed;
+  const local = normalizedToLocal(xRatio, yRatio, viewBoxData);
+  const tolerance = Math.max(viewBoxData.width, viewBoxData.height) * toleranceRatio;
+  const toleranceSq = tolerance * tolerance;
+
+  for (const sample of samples) {
+    const dx = sample.x - local.x;
+    const dy = sample.y - local.y;
+    if (dx * dx + dy * dy <= toleranceSq) return true;
+  }
+  return false;
+};
+
 export const extractCustomShapeFromSvgText = (svgText) => {
   const source = String(svgText || '').trim();
   if (!source) {

@@ -125,6 +125,7 @@ export default {
       elements: [],
       connections: [],
       selectedElement: null,
+      expandedElementLists: {},
       zoom: 1,
       currentDiagramId: null,
       diagrams: [],

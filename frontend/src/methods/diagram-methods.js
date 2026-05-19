@@ -740,6 +740,17 @@ buildDefaultFieldValues(fieldSchema) {
       if (!Array.isArray(fieldSchema)) return output;
       for (const field of fieldSchema) {
         if (!field || typeof field.key !== 'string') continue;
+        if (String(field.type || '').toLowerCase() === 'label') continue;
+        if (String(field.type || '').toLowerCase() === 'list') {
+          if (Array.isArray(field.default)) {
+            output[field.key] = field.default.map((item) => String(item ?? '').trim()).filter(Boolean);
+          } else if (typeof field.default === 'string') {
+            output[field.key] = field.default.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+          } else {
+            output[field.key] = [];
+          }
+          continue;
+        }
         output[field.key] = field.default ?? null;
       }
       return output;
@@ -776,7 +787,10 @@ createElement(type, x, y) {
             fontSize: 14,
             customColor: null,
             customBorder: null,
-            properties: fieldDefaults
+            properties: {
+              ...fieldDefaults,
+              fieldFontSize: 11,
+            }
         };
         
         // Р”Р»СЏ РєР»Р°СЃСЃРѕРІ РёРЅРёС†РёР°Р»РёР·РёСЂСѓРµРј Р°С‚СЂРёР±СѓС‚С‹ Рё РѕРїРµСЂР°С†РёРё

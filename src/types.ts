@@ -18,7 +18,7 @@ export type Point = {
 };
 
 export type ArrowMarker = 'none' | 'arrow' | 'empty_arrow' | 'filled_diamond' | 'empty_diamond';
-export type CustomFieldType = 'text' | 'number' | 'select' | 'checkbox';
+export type CustomFieldType = 'input' | 'label' | 'list' | 'text' | 'number' | 'select' | 'checkbox';
 
 export interface AuthContext {
   userId: string | null;
@@ -326,7 +326,7 @@ export interface ElementTypeFieldSchema {
   label: string;
   type: CustomFieldType;
   required?: boolean;
-  default?: string | number | boolean | null;
+  default?: string | number | boolean | string[] | null;
   visibleOnBlock?: boolean;
   options?: ElementTypeFieldOption[];
 }

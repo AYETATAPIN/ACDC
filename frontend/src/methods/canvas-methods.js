@@ -2,7 +2,7 @@ import { findBestSegmentIndex, toggleBendPointPoints } from '../utils/bendPoints
 import { diagramsService, diagramTypesService, ApiError } from '../services/index.js';
 import { isConnectionAllowedByMatrix, normalizeRulesMatrix } from '../rules/connectionRules.js';
 import { BUILTIN_DIAGRAM_TYPE_IDS } from '../app-constants.js';
-import { isPointInsideCustomShape, parseCustomShapeData } from '../utils/customShape.js';
+import { isPointInsideCustomShape, isPointNearCustomShapeStroke, parseCustomShapeData } from '../utils/customShape.js';
 
 export const canvasMethods = {
 getMidPoint(conn) {
@@ -105,6 +105,57 @@ getElementPreset(type) {
       return schema.filter((field) => field && field.visibleOnBlock !== false);
     },
 
+    resolveElementFieldType(field) {
+      const type = String(field?.type || 'input').toLowerCase();
+      if (['text', 'number', 'select', 'checkbox'].includes(type)) return 'input';
+      return ['input', 'label', 'list'].includes(type) ? type : 'input';
+    },
+
+    getElementFieldKey(field, idx = 0) {
+      const key = typeof field?.key === 'string' ? field.key.trim() : '';
+      return key || `field_${idx + 1}`;
+    },
+
+    getElementFieldLabel(field, idx = 0) {
+      const label = typeof field?.label === 'string' ? field.label.trim() : '';
+      return label || this.getElementFieldKey(field, idx);
+    },
+
+    normalizeElementListValue(value) {
+      if (Array.isArray(value)) {
+        return value.map((item) => String(item ?? '').trim()).filter(Boolean);
+      }
+      if (typeof value === 'string') {
+        return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+      }
+      return [];
+    },
+
+    getElementListItems(element, fieldOrKey, idx = 0) {
+      const key = typeof fieldOrKey === 'string' ? fieldOrKey : this.getElementFieldKey(fieldOrKey, idx);
+      const fallback = typeof fieldOrKey === 'string' ? [] : fieldOrKey?.default;
+      const props = element?.properties && typeof element.properties === 'object' ? element.properties : {};
+      return this.normalizeElementListValue(props[key] ?? fallback);
+    },
+
+    getElementListStateKey(element, fieldOrKey, idx = 0) {
+      const key = typeof fieldOrKey === 'string' ? fieldOrKey : this.getElementFieldKey(fieldOrKey, idx);
+      return `${element?.id || 'element'}:${key}`;
+    },
+
+    isElementListExpanded(element, fieldOrKey, idx = 0) {
+      const key = this.getElementListStateKey(element, fieldOrKey, idx);
+      return Boolean(this.expandedElementLists?.[key]);
+    },
+
+    toggleElementList(element, fieldOrKey, idx = 0) {
+      const key = this.getElementListStateKey(element, fieldOrKey, idx);
+      this.expandedElementLists = {
+        ...(this.expandedElementLists || {}),
+        [key]: !this.isElementListExpanded(element, fieldOrKey, idx),
+      };
+    },
+
     getElementTypeLabel(type) {
       const preset = this.getElementPreset(type);
       if (preset?.label && String(preset.label).trim()) return String(preset.label).trim();
@@ -116,19 +167,59 @@ getElementPreset(type) {
         .replace(/\b\w/g, (ch) => ch.toUpperCase());
     },
 
-    getElementFieldStyle(field) {
+    getElementFieldTextColor(element, field, idx = 0) {
+      const normalizeHexColor = (value) => {
+        const source = String(value || '').trim().replace(/^#/, '');
+        if (/^[0-9a-fA-F]{6}$/.test(source)) return `#${source.toLowerCase()}`;
+        if (/^[0-9a-fA-F]{3}$/.test(source)) {
+          const expanded = source.split('').map((ch) => `${ch}${ch}`).join('');
+          return `#${expanded.toLowerCase()}`;
+        }
+        return '';
+      };
+      const key = this.getElementFieldKey(field, idx);
+      const props = element?.properties && typeof element.properties === 'object' ? element.properties : {};
+      const colorMap = props.__field_colors && typeof props.__field_colors === 'object' ? props.__field_colors : {};
+      const color =
+        normalizeHexColor(colorMap[key]) ||
+        normalizeHexColor(field?.textColor) ||
+        '';
+      return color || null;
+    },
+
+    getElementInnerTextSize(element) {
+      const size = Number(element?.properties?.fieldFontSize);
+      if (Number.isFinite(size)) {
+        return Math.max(8, Math.min(28, size));
+      }
+      return 11;
+    },
+
+    getElementFieldStyle(element, field, idx = 0) {
       const clamp = (v, fallback) => Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : fallback));
       const x = clamp(field?.x, 0.5);
       const y = clamp(field?.y, 0.5);
-      return {
+      const color = this.getElementFieldTextColor(element, field, idx);
+      const style = {
         left: `${(x * 100).toFixed(1)}%`,
         top: `${(y * 100).toFixed(1)}%`,
+        fontSize: `${this.getElementInnerTextSize(element)}px`,
       };
+      if (color) {
+        style.color = color;
+      }
+      return style;
     },
 
     getElementFieldDisplayValue(element, field, idx = 0) {
-      const fallback = field?.label || field?.key || `field_${idx + 1}`;
-      const key = typeof field?.key === 'string' ? field.key.trim() : '';
+      const fallback = this.getElementFieldLabel(field, idx);
+      const key = this.getElementFieldKey(field, idx);
+      if (this.resolveElementFieldType(field) === 'list') {
+        return `${fallback} (${this.getElementListItems(element, field, idx).length})`;
+      }
+      if (this.resolveElementFieldType(field) === 'label') {
+        return fallback;
+      }
       if (!key || !element || typeof element !== 'object') return fallback;
       const props = element.properties && typeof element.properties === 'object' ? element.properties : {};
       const value = props[key];
@@ -764,11 +855,7 @@ getElementAtPosition(x, y) {
           const raw = this.getElementPreset(element.type)?.svg_path || '';
           const xRatio = (x - element.x) / Math.max(1, Number(element.width) || 1);
           const yRatio = (y - element.y) / Math.max(1, Number(element.height) || 1);
-          if (isPointInsideCustomShape(raw, xRatio, yRatio)) {
-            return element;
-          }
-          // For open or stroke-only custom paths, keep element selectable inside its bbox.
-          if (parseCustomShapeData(raw).d) {
+          if (isPointInsideCustomShape(raw, xRatio, yRatio) || isPointNearCustomShapeStroke(raw, xRatio, yRatio)) {
             return element;
           }
         } else {

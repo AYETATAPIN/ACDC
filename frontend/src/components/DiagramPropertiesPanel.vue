@@ -1,79 +1,73 @@
-<template>
+﻿<template>
   <aside class="panel" v-if="selectedElement || selectedConnection">
     <div class="header">
-      <h3>{{ selectedElement ? 'Свойства элемента' : 'Свойства связи' }}</h3>
+      <h3>{{ selectedElement ? 'Element Properties' : 'Connection Properties' }}</h3>
       <Button icon="pi pi-times" text rounded @click="deselectAll" />
     </div>
 
     <div class="content" v-if="selectedElement">
       <div class="field" v-if="selectedElement.type === 'class'">
-        <label>Атрибуты</label>
+        <label>Attributes</label>
         <Textarea v-model="classAttributes" rows="4" autoResize :disabled="!canWrite" @update:modelValue="updateClassProperties" />
       </div>
 
       <div class="field" v-if="selectedElement.type === 'class'">
-        <label>Операции</label>
+        <label>Methods</label>
         <Textarea v-model="classOperations" rows="4" autoResize :disabled="!canWrite" @update:modelValue="updateClassProperties" />
       </div>
 
       <div class="field">
-        <label>Текст</label>
+        <label>Title</label>
         <InputText v-model="selectedElement.text" :disabled="!canWrite" />
       </div>
 
       <div class="field field-group" v-if="elementFieldSchema.length">
-        <label>Поля элемента</label>
+        <label>Element Fields</label>
         <div class="custom-fields">
           <div class="custom-field-item" v-for="(field, idx) in elementFieldSchema" :key="`field-editor-${idx}-${field.key || 'no_key'}`">
             <small class="custom-field-label">{{ field.label || field.key || `field_${idx + 1}` }}</small>
 
+            <Textarea
+              v-if="resolveFieldType(field) === 'list'"
+              :modelValue="listValueToText(getFieldValue(field))"
+              rows="4"
+              autoResize
+              :disabled="!canWrite"
+              @update:modelValue="setFieldValue(field, listTextToValue($event))"
+            />
+
             <InputText
-              v-if="resolveFieldType(field) === 'text'"
+              v-else-if="resolveFieldType(field) === 'input'"
               :modelValue="getFieldValue(field)"
               :disabled="!canWrite"
               @update:modelValue="setFieldValue(field, $event)"
             />
 
-            <InputNumber
-              v-else-if="resolveFieldType(field) === 'number'"
-              :modelValue="toNumberValue(getFieldValue(field))"
-              :useGrouping="false"
-              :disabled="!canWrite"
-              @update:modelValue="setFieldValue(field, $event)"
-            />
+            <div v-else class="label-preview">{{ String(field?.label || field?.key || '').trim() || 'Label' }}</div>
 
-            <Dropdown
-              v-else-if="resolveFieldType(field) === 'select'"
-              :modelValue="getFieldValue(field)"
-              :options="getSelectOptions(field)"
-              optionLabel="label"
-              optionValue="value"
-              placeholder="Выберите значение"
-              :disabled="!canWrite"
-              @update:modelValue="setFieldValue(field, $event)"
-            />
-
-            <div v-else-if="resolveFieldType(field) === 'checkbox'" class="row checkbox-row">
-              <InputSwitch
-                :modelValue="Boolean(getFieldValue(field))"
-                :disabled="!canWrite"
-                @update:modelValue="setFieldValue(field, $event)"
-              />
-              <span class="checkbox-value">{{ Boolean(getFieldValue(field)) ? 'Да' : 'Нет' }}</span>
+            <div class="custom-field-color">
+              <small>Text color</small>
+              <div class="color-inline">
+                <ColorPicker
+                  format="hex"
+                  :modelValue="toPickerColor(getFieldTextColor(field))"
+                  :disabled="!canWrite"
+                  @update:modelValue="setFieldTextColor(field, toHexColor($event))"
+                />
+                <InputText
+                  :modelValue="getFieldTextColor(field)"
+                  :disabled="!canWrite"
+                  placeholder="#ffffff"
+                  @update:modelValue="setFieldTextColor(field, $event)"
+                />
+              </div>
             </div>
-
-            <InputText
-              v-else
-              :modelValue="getFieldValue(field)"
-              :disabled="!canWrite"
-              @update:modelValue="setFieldValue(field, $event)"
-            />
           </div>
         </div>
       </div>
 
       <div class="field">
-        <label>Размер шрифта</label>
+        <label>Title Text Size</label>
         <div class="row slider-row">
           <div class="slider-wrap">
           <Slider v-model="selectedElement.fontSize" :min="10" :max="30" :disabled="!canWrite" />
@@ -83,43 +77,53 @@
       </div>
 
       <div class="field">
-        <label>Цвет фона</label>
+        <label>Inner Text Size</label>
+        <div class="row slider-row">
+          <div class="slider-wrap">
+            <Slider :modelValue="getInnerTextSize()" :min="8" :max="28" :disabled="!canWrite" @update:modelValue="setInnerTextSize" />
+          </div>
+          <Tag :value="`${getInnerTextSize()}px`" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Fill Color</label>
         <ColorPicker
-          :modelValue="selectedElement.customColor || getElementPreset(selectedElement.type)?.color || '#95a5a6'"
+          :modelValue="toPickerColor(selectedElement.customColor || getElementPreset(selectedElement.type)?.color || '#95a5a6')"
           :disabled="!canWrite"
           @update:modelValue="selectedElement.customColor = toHexColor($event)"
         />
       </div>
 
       <div class="field">
-        <label>Цвет границы</label>
+        <label>Border Color</label>
         <ColorPicker
-          :modelValue="selectedElement.customBorder || getElementPreset(selectedElement.type)?.border || '#2c3e50'"
+          :modelValue="toPickerColor(selectedElement.customBorder || getElementPreset(selectedElement.type)?.border || '#2c3e50')"
           :disabled="!canWrite"
           @update:modelValue="selectedElement.customBorder = toHexColor($event)"
         />
       </div>
 
-      <Tag severity="info" :value="`Тип: ${getElementDisplayType(selectedElement)}`" />
+      <Tag severity="info" :value="`Type: ${getElementDisplayType(selectedElement)}`" />
     </div>
 
     <div class="content" v-else-if="selectedConnection">
       <div class="field">
-        <label>Надпись</label>
+        <label>Label</label>
         <InputText v-model="selectedConnection.label" :disabled="!canWrite" />
       </div>
 
       <div class="field">
-        <label>Цвет надписи</label>
+        <label>Label Color</label>
         <ColorPicker
-          :modelValue="selectedConnection.labelColor || '#2c3e50'"
+          :modelValue="toPickerColor(selectedConnection.labelColor || '#2c3e50')"
           :disabled="!canWrite"
           @update:modelValue="selectedConnection.labelColor = toHexColor($event)"
         />
       </div>
 
       <div class="field">
-        <label>Размер надписи</label>
+        <label>Label Size</label>
         <div class="row slider-row">
           <div class="slider-wrap">
             <Slider v-model="selectedConnection.labelFontSize" :min="8" :max="24" :disabled="!canWrite" />
@@ -129,24 +133,24 @@
       </div>
 
       <div class="field">
-        <label>Цвет линии</label>
+        <label>Line Color</label>
         <ColorPicker
-          :modelValue="selectedConnection.customColor || '#34495e'"
+          :modelValue="toPickerColor(selectedConnection.customColor || '#34495e')"
           :disabled="!canWrite"
           @update:modelValue="selectedConnection.customColor = toHexColor($event)"
         />
       </div>
 
       <div class="field">
-        <label>Стиль линии</label>
+        <label>Line Style</label>
         <Dropdown v-model="selectedConnection.customDash" :options="dashOptions" optionLabel="label" optionValue="value" :disabled="!canWrite" />
       </div>
 
       <div class="actions">
-        <Button icon="pi pi-plus" label="Точка изгиба" size="small" outlined :disabled="!canWrite" @click="addSelectedBendPoint()" />
+        <Button icon="pi pi-plus" label="Add Bend Point" size="small" outlined :disabled="!canWrite" @click="addSelectedBendPoint()" />
         <Button
           icon="pi pi-minus-circle"
-          label="Удалить точку"
+          label="Remove Point"
           size="small"
           outlined
           :disabled="!canWrite || !selectedConnection || !hasBendPoints(selectedConnection)"
@@ -154,16 +158,16 @@
         />
         <Button
           icon="pi pi-trash"
-          label="Удалить все точки"
+          label="Remove All Points"
           size="small"
           outlined
           :disabled="!canWrite || !selectedConnection || !hasBendPoints(selectedConnection)"
           @click="selectedConnection && clearBendPoints(selectedConnection)"
         />
-        <Button icon="pi pi-times" label="Удалить связь" size="small" severity="danger" :disabled="!canWrite" @click="deleteConnection(selectedConnection)" />
+        <Button icon="pi pi-times" label="Delete Connection" size="small" severity="danger" :disabled="!canWrite" @click="deleteConnection(selectedConnection)" />
       </div>
 
-      <Tag :severity="selectedConnection.rule_violation ? 'warning' : 'info'" :value="selectedConnection.rule_violation ? 'Нарушение правила' : `Тип: ${toReadableType(selectedConnection.type)}`" />
+      <Tag :severity="selectedConnection.rule_violation ? 'warning' : 'info'" :value="selectedConnection.rule_violation ? 'Rule Violation' : `Type: ${toReadableType(selectedConnection.type)}`" />
     </div>
   </aside>
 </template>
@@ -176,12 +180,10 @@ import Tag from 'primevue/tag';
 import Dropdown from 'primevue/dropdown';
 import Textarea from 'primevue/textarea';
 import ColorPicker from 'primevue/colorpicker';
-import InputNumber from 'primevue/inputnumber';
-import InputSwitch from 'primevue/inputswitch';
 
 export default {
   name: 'DiagramPropertiesPanel',
-  components: { Button, InputText, Slider, Tag, Dropdown, Textarea, ColorPicker, InputNumber, InputSwitch },
+  components: { Button, InputText, Slider, Tag, Dropdown, Textarea, ColorPicker },
   props: {
     selectedElement: { type: Object, default: null },
     selectedConnection: { type: Object, default: null },
@@ -202,10 +204,10 @@ export default {
       classAttributes: '',
       classOperations: '',
       dashOptions: [
-        { label: 'Сплошная', value: '' },
-        { label: 'Пунктир', value: '6 4' },
-        { label: 'Длинный пунктир', value: '10 6' },
-        { label: 'Точки', value: '3 3' },
+        { label: 'Solid', value: '' },
+        { label: 'Dashed', value: '6 4' },
+        { label: 'Long Dashed', value: '10 6' },
+        { label: 'Dotted', value: '3 3' },
       ],
     };
   },
@@ -230,9 +232,20 @@ export default {
     },
   },
   methods: {
+    normalizeHexColor(value, fallback = '#000000') {
+      const source = String(value || '').trim().replace(/^#/, '');
+      if (/^[0-9a-fA-F]{6}$/.test(source)) return `#${source.toLowerCase()}`;
+      if (/^[0-9a-fA-F]{3}$/.test(source)) {
+        const expanded = source.split('').map((ch) => `${ch}${ch}`).join('');
+        return `#${expanded.toLowerCase()}`;
+      }
+      return fallback;
+    },
     toHexColor(value) {
-      if (typeof value !== 'string') return '#000000';
-      return value.startsWith('#') ? value : `#${value}`;
+      return this.normalizeHexColor(value, '#000000');
+    },
+    toPickerColor(value) {
+      return this.normalizeHexColor(value, '#ffffff').slice(1);
     },
     updateClassProperties() {
       if (!this.canWrite) return;
@@ -244,11 +257,24 @@ export default {
       };
     },
     resolveFieldType(field) {
-      const t = String(field?.type || 'text').toLowerCase();
-      return ['text', 'number', 'select', 'checkbox'].includes(t) ? t : 'text';
+      const t = String(field?.type || 'input').toLowerCase();
+      if (['text', 'number', 'select', 'checkbox'].includes(t)) return 'input';
+      return ['input', 'label', 'list'].includes(t) ? t : 'input';
+    },
+    normalizeListValue(value) {
+      if (Array.isArray(value)) return value.map((item) => String(item ?? '').trim()).filter(Boolean);
+      if (typeof value === 'string') return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
+      return [];
+    },
+    listValueToText(value) {
+      return this.normalizeListValue(value).join('\n');
+    },
+    listTextToValue(value) {
+      return this.normalizeListValue(value);
     },
     resolveFieldDefault(field) {
       const type = this.resolveFieldType(field);
+      if (type === 'list') return this.normalizeListValue(field?.default);
       if (type === 'checkbox') return Boolean(field?.default);
       if (type === 'number') {
         const n = Number(field?.default);
@@ -262,6 +288,30 @@ export default {
       if (!this.selectedElement.properties || typeof this.selectedElement.properties !== 'object') {
         this.selectedElement.properties = {};
       }
+    },
+    getInnerTextSize() {
+      const fromProps = Number(this.selectedElement?.properties?.fieldFontSize);
+      if (Number.isFinite(fromProps) && fromProps >= 8 && fromProps <= 28) return Math.round(fromProps);
+      return 11;
+    },
+    setInnerTextSize(value) {
+      if (!this.canWrite) return;
+      this.ensureElementProperties();
+      if (!this.selectedElement) return;
+      const numeric = Number(value);
+      const clamped = Math.max(8, Math.min(28, Number.isFinite(numeric) ? numeric : 11));
+      this.selectedElement.properties = {
+        ...this.selectedElement.properties,
+        fieldFontSize: clamped,
+      };
+    },
+    ensureFieldColorMap() {
+      this.ensureElementProperties();
+      if (!this.selectedElement) return {};
+      if (!this.selectedElement.properties.__field_colors || typeof this.selectedElement.properties.__field_colors !== 'object') {
+        this.selectedElement.properties.__field_colors = {};
+      }
+      return this.selectedElement.properties.__field_colors;
     },
     syncFieldDefaults(element = this.selectedElement) {
       if (!element) return;
@@ -291,16 +341,36 @@ export default {
       const key = String(field?.key || '').trim();
       if (!key || !this.selectedElement) return;
       const type = this.resolveFieldType(field);
-      if (type === 'number') {
-        const normalized = value === null || value === undefined || value === '' ? null : Number(value);
-        this.selectedElement.properties[key] = Number.isFinite(normalized) ? normalized : null;
+      if (type === 'label') {
+        this.selectedElement.properties[key] = this.selectedElement.properties[key] ?? '';
         return;
       }
-      if (type === 'checkbox') {
-        this.selectedElement.properties[key] = Boolean(value);
+      if (type === 'list') {
+        this.selectedElement.properties[key] = this.normalizeListValue(value);
         return;
       }
       this.selectedElement.properties[key] = value ?? '';
+    },
+    getFieldTextColor(field) {
+      const key = String(field?.key || '').trim();
+      const fallback = this.normalizeHexColor(field?.textColor, '#ffffff');
+      if (!key || !this.selectedElement) return fallback;
+      const colorMap = this.ensureFieldColorMap();
+      const direct = this.normalizeHexColor(colorMap[key], '');
+      return direct || fallback;
+    },
+    setFieldTextColor(field, value) {
+      if (!this.canWrite) return;
+      const key = String(field?.key || '').trim();
+      if (!key || !this.selectedElement) return;
+      const colorMap = this.ensureFieldColorMap();
+      colorMap[key] = this.normalizeHexColor(value, this.getFieldTextColor(field));
+      this.selectedElement.properties = {
+        ...this.selectedElement.properties,
+        __field_colors: {
+          ...colorMap,
+        },
+      };
     },
     getSelectOptions(field) {
       const raw = Array.isArray(field?.options) ? field.options : [];
@@ -432,6 +502,34 @@ export default {
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--app-muted, #334155);
+}
+
+.label-preview {
+  font-size: 0.82rem;
+  color: var(--app-text, #1f2937);
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px dashed var(--app-border, #dbe7ef);
+  background: var(--app-panel, #ffffff);
+}
+
+.custom-field-color {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.custom-field-color small {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--app-muted, #334155);
+}
+
+.color-inline {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.4rem;
+  align-items: center;
 }
 
 .checkbox-row {

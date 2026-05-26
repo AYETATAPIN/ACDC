@@ -20,7 +20,7 @@
     <div v-else-if="shareLoadError" class="share-error-screen">
       <div class="share-error-card">
         <p class="share-error-eyebrow">ACDC</p>
-        <h1>РЎСЃС‹Р»РєР° РЅРµРґРµР№СЃС‚РІРёС‚РµР»СЊРЅР°</h1>
+        <h1>Ссылка недействительна</h1>
         <p>{{ shareLoadError }}</p>
       </div>
     </div>
@@ -82,15 +82,15 @@
       :diagram-id="currentDiagramId"
     />
 
-    <Dialog v-model:visible="importDialog.visible" modal header="РРјРїРѕСЂС‚ РґРёР°РіСЂР°РјРјС‹" :style="{ width: '440px' }" class="themed-dialog import-dialog">
+    <Dialog v-model:visible="importDialog.visible" modal header="Импорт диаграммы" :style="{ width: '440px' }" class="themed-dialog import-dialog">
       <div class="bend-dialog-form">
-        <label>Р¤Р°Р№Р»</label>
+        <label>Файл</label>
         <InputText :modelValue="importDialog.fileName" readonly />
       </div>
       <template #footer>
-        <Button label="РЎРѕР·РґР°С‚СЊ РЅРѕРІСѓСЋ" icon="pi pi-plus" :loading="isImporting" @click="confirmImportDiagram('create')" />
+        <Button label="Создать новую" icon="pi pi-plus" :loading="isImporting" @click="confirmImportDiagram('create')" />
         <Button
-          label="Р—Р°РјРµРЅРёС‚СЊ С‚РµРєСѓС‰СѓСЋ"
+          label="Заменить текущую"
           icon="pi pi-refresh"
           severity="warning"
           outlined
@@ -103,21 +103,21 @@
 
     <div v-if="errorMessage" class="error-toast">
       <div class="error-content">
-        <strong>РћС€РёР±РєР°:</strong> {{ errorMessage }}
+        <strong>Ошибка:</strong> {{ errorMessage }}
         <button @click="errorMessage = null" class="error-close">&times;</button>
       </div>
     </div>
 
     <section v-if="diagramTypeVersionStatus?.has_update" class="type-version-banner">
       <div class="type-version-banner-main">
-        <strong>Р”РѕСЃС‚СѓРїРЅР° РЅРѕРІР°СЏ РІРµСЂСЃРёСЏ РїСЂР°РІРёР»</strong>
+        <strong>Доступна новая версия правил</strong>
         <span>
-          РўРµРєСѓС‰Р°СЏ РІРµСЂСЃРёСЏ: {{ diagramTypeVersionStatus.current_version_number || 'вЂ”' }},
-          РЅРѕРІР°СЏ РІРµСЂСЃРёСЏ: {{ diagramTypeVersionStatus.latest_version_number || 'вЂ”' }}.
+          Текущая версия: {{ diagramTypeVersionStatus.current_version_number || '—' }},
+          новая версия: {{ diagramTypeVersionStatus.latest_version_number || '—' }}.
         </span>
       </div>
       <Button
-        label="РћР±РЅРѕРІРёС‚СЊ"
+        label="Обновить"
         icon="pi pi-refresh"
         :loading="isUpdatingTypeVersion"
         :disabled="!accessPolicy.canWrite"
@@ -617,7 +617,7 @@
                   <div class="element-type-tag" :style="{ fontSize: `${getElementInnerTextSize(element)}px` }">{{ getElementTypeLabel(element.type) }}</div>
               </template>
               
-              <div v-if="accessPolicy.canWrite" class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="РР·РјРµРЅРёС‚СЊ СЂР°Р·РјРµСЂ"></div>
+              <div v-if="accessPolicy.canWrite" class="resize-handle" @mousedown.stop="handleResizeMouseDown(element, $event)" title="Изменить размер"></div>
           </div>
 
         <svg class="connection-handles-layer" xmlns="http://www.w3.org/2000/svg">
@@ -670,14 +670,14 @@
       />
     </div>
 
-    <Dialog v-model:visible="bendPointDialog.visible" modal header="РўРѕС‡РєР° РёР·РіРёР±Р°" :style="{ width: '420px' }" class="themed-dialog bend-point-dialog">
+    <Dialog v-model:visible="bendPointDialog.visible" modal header="Точка изгиба" :style="{ width: '420px' }" class="themed-dialog bend-point-dialog">
       <div class="bend-dialog-form">
-        <label for="bend-point-label">РџРѕРґРїРёСЃСЊ С‚РѕС‡РєРё</label>
-        <InputText id="bend-point-label" v-model="bendPointDialog.label" placeholder="РќР°РїСЂРёРјРµСЂ: decision branch" />
+        <label for="bend-point-label">Подпись точки</label>
+        <InputText id="bend-point-label" v-model="bendPointDialog.label" placeholder="Например: decision branch" />
       </div>
       <template #footer>
-        <Button label="РЈРґР°Р»РёС‚СЊ С‚РѕС‡РєСѓ" icon="pi pi-trash" severity="danger" outlined :disabled="!accessPolicy.canWrite" @click="deleteBendPointFromDialog" />
-        <Button label="РЎРѕС…СЂР°РЅРёС‚СЊ" icon="pi pi-check" :disabled="!accessPolicy.canWrite" @click="saveBendPointDialog" />
+        <Button label="Удалить точку" icon="pi pi-trash" severity="danger" outlined :disabled="!accessPolicy.canWrite" @click="deleteBendPointFromDialog" />
+        <Button label="Сохранить" icon="pi pi-check" :disabled="!accessPolicy.canWrite" @click="saveBendPointDialog" />
       </template>
     </Dialog>
     </template>

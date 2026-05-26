@@ -184,42 +184,128 @@
             </div>
           </details>
 
-          <div class="actions matrix-actions">
-            <Dropdown v-model="bulkForm.mode" :options="bulkModes" optionLabel="label" optionValue="value" />
-            <Dropdown v-model="bulkForm.target_id" :options="bulkTargets" optionLabel="label" optionValue="value" placeholder="Target" />
-            <MultiSelect v-model="bulkForm.connection_type_ids" :options="connectionTypes" optionLabel="name" optionValue="id" display="chip" placeholder="All connection types" />
-            <SelectButton v-model="bulkForm.allowed" :options="allowOptions" optionLabel="label" optionValue="value" />
-            <Button label="Apply Bulk" icon="pi pi-bolt" :disabled="!bulkForm.target_id || !canMutate" @click="applyBulkRules" />
+          <div class="rules-view-selector-bar">
+            <SelectButton
+              v-model="rulesViewMode"
+              :options="[
+                { label: 'Matrix Table', value: 'matrix' },
+                { label: 'Pair Selector', value: 'pair' }
+              ]"
+              optionLabel="label"
+              optionValue="value"
+            />
           </div>
 
-          <DataTable :value="matrixRows" scrollable scrollHeight="68vh" class="matrix-table">
-            <Column header="From \\ To" frozen>
-              <template #body="{ data }">
-                <div>{{ data.fromElement.name }}</div>
-              </template>
-            </Column>
-            <Column v-for="target in matrixElements" :key="target.id" :field="target.id" :header="target.name">
-              <template #body="{ data }">
-                <div class="matrix-cell">
-                  <button
-                    v-for="rule in data[target.id]"
-                    :key="rule.connection_type_id"
-                    type="button"
-                    class="rule-toggle"
-                    :class="{ allowed: rule.allowed, blocked: !rule.allowed }"
-                    :disabled="!canMutate"
-                    @click.stop="toggleCellRule(data.fromElement, target, rule)"
-                  >
-                    <span class="rule-name">
-                      <span class="rule-line" :style="ruleLineStyle(rule.connection_type_id)"></span>
-                      <span>{{ connectionName(rule.connection_type_id) }} {{ arrowGlyph(rule.connection_type_id) }}</span>
-                    </span>
-                    <span class="rule-state">{{ rule.allowed ? 'allowed' : 'blocked' }}</span>
-                  </button>
+          <template v-if="rulesViewMode === 'matrix'">
+            <div class="actions matrix-actions">
+              <Dropdown v-model="bulkForm.mode" :options="bulkModes" optionLabel="label" optionValue="value" />
+              <Dropdown v-model="bulkForm.target_id" :options="bulkTargets" optionLabel="label" optionValue="value" placeholder="Target" />
+              <MultiSelect v-model="bulkForm.connection_type_ids" :options="connectionTypes" optionLabel="name" optionValue="id" display="chip" placeholder="All connection types" />
+              <SelectButton v-model="bulkForm.allowed" :options="allowOptions" optionLabel="label" optionValue="value" />
+              <Button label="Apply Bulk" icon="pi pi-bolt" :disabled="!bulkForm.target_id || !canMutate" @click="applyBulkRules" />
+            </div>
+
+            <DataTable :value="matrixRows" scrollable scrollHeight="68vh" class="matrix-table">
+              <Column header="From \\ To" frozen>
+                <template #body="{ data }">
+                  <div>{{ data.fromElement.name }}</div>
+                </template>
+              </Column>
+              <Column v-for="target in matrixElements" :key="target.id" :field="target.id" :header="target.name">
+                <template #body="{ data }">
+                  <div class="matrix-cell">
+                    <button
+                      v-for="rule in data[target.id]"
+                      :key="rule.connection_type_id"
+                      type="button"
+                      class="rule-toggle"
+                      :class="{ allowed: rule.allowed, blocked: !rule.allowed }"
+                      :disabled="!canMutate"
+                      @click.stop="toggleCellRule(data.fromElement, target, rule)"
+                    >
+                      <span class="rule-name">
+                        <span class="rule-line" :style="ruleLineStyle(rule.connection_type_id)"></span>
+                        <span>{{ connectionName(rule.connection_type_id) }} {{ arrowGlyph(rule.connection_type_id) }}</span>
+                      </span>
+                      <span class="rule-state">{{ rule.allowed ? 'allowed' : 'blocked' }}</span>
+                    </button>
+                  </div>
+                </template>
+              </Column>
+            </DataTable>
+          </template>
+
+          <template v-else>
+            <div class="pair-selector-container">
+              <div class="pair-selectors">
+                <div class="selector-field">
+                  <label>From Element</label>
+                  <Dropdown
+                    v-model="pairSelectorFrom"
+                    :options="elementTypes"
+                    optionLabel="name"
+                    optionValue="id"
+                    placeholder="Select source element"
+                    class="w-full"
+                    filter
+                    resetFilterOnHide
+                  />
                 </div>
-              </template>
-            </Column>
-          </DataTable>
+                <div class="pair-arrow">
+                  <i class="pi pi-arrow-right"></i>
+                </div>
+                <div class="selector-field">
+                  <label>To Element</label>
+                  <Dropdown
+                    v-model="pairSelectorTo"
+                    :options="elementTypes"
+                    optionLabel="name"
+                    optionValue="id"
+                    placeholder="Select target element"
+                    class="w-full"
+                    filter
+                    resetFilterOnHide
+                  />
+                </div>
+              </div>
+
+              <div v-if="pairSelectorFrom && pairSelectorTo" class="pair-rules-list">
+                <div class="pair-rules-header">
+                  <h5>Configure Connections</h5>
+                  <small class="muted">Toggle connection permission below</small>
+                </div>
+
+                <div class="pair-rules-grid">
+                  <div
+                    v-for="rule in selectedPairRules"
+                    :key="rule.connection_type_id"
+                    class="pair-rule-item"
+                    :class="{ allowed: rule.allowed, blocked: !rule.allowed }"
+                  >
+                    <div class="pair-rule-info">
+                      <span class="rule-line" :style="ruleLineStyle(rule.connection_type_id)"></span>
+                      <span class="pair-rule-name">
+                        {{ connectionName(rule.connection_type_id) }} {{ arrowGlyph(rule.connection_type_id) }}
+                      </span>
+                    </div>
+                    <Button
+                      :label="rule.allowed ? 'Allowed' : 'Blocked'"
+                      :severity="rule.allowed ? 'success' : 'danger'"
+                      size="small"
+                      :icon="rule.allowed ? 'pi pi-check-circle' : 'pi pi-ban'"
+                      :disabled="!canMutate"
+                      @click="togglePairRule(rule.connection_type_id, rule.allowed)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div v-else class="pair-selector-placeholder">
+                <i class="pi pi-sliders-h placeholder-icon"></i>
+                <p>Select From and To element types above to configure connection rules.</p>
+              </div>
+            </div>
+          </template>
         </section>
       </TabPanel>
     </TabView>
@@ -480,6 +566,10 @@ const elementEditor = reactive({ visible: false, mode: 'create' });
 const bulkForm = reactive({ mode: 'row', target_id: null, connection_type_ids: [], allowed: true });
 const pendingRuleKey = ref('');
 
+const rulesViewMode = ref('matrix');
+const pairSelectorFrom = ref(null);
+const pairSelectorTo = ref(null);
+
 const shapeOptions = [{ label: 'Rect', value: 'rect' }, { label: 'RoundRect', value: 'roundrect' }, { label: 'Ellipse', value: 'ellipse' }, { label: 'Diamond', value: 'diamond' }, { label: 'Circle', value: 'circle' }, { label: 'Cylinder', value: 'cylinder' }, { label: 'Actor', value: 'actor' }, { label: 'Custom', value: 'custom' }];
 const fieldTypeOptions = [{ label: 'Input', value: 'input' }, { label: 'List', value: 'list' }, { label: 'Label', value: 'label' }];
 const arrowOptions = [{ label: 'None', value: 'none' }, { label: 'Arrow', value: 'arrow' }, { label: 'Empty Arrow', value: 'empty_arrow' }, { label: 'Filled Diamond', value: 'filled_diamond' }, { label: 'Empty Diamond', value: 'empty_diamond' }];
@@ -492,6 +582,21 @@ const accessCanWrite = computed(() => props.accessPolicy?.canWrite !== false);
 const isSharedMode = computed(() => props.accessPolicy?.mode === 'shared');
 const canMutate = computed(() => Boolean(accessCanWrite.value && selectedType.value && !selectedType.value.is_builtin));
 const bulkTargets = computed(() => bulkForm.mode === 'connection_type' ? connectionTypes.value.map((x) => ({ label: x.name, value: x.id })) : matrixElements.value.map((x) => ({ label: x.name, value: x.id })));
+const selectedPairRules = computed(() => {
+  if (!pairSelectorFrom.value || !pairSelectorTo.value) return [];
+  const fromId = pairSelectorFrom.value;
+  const toId = pairSelectorTo.value;
+  const cell = matrix.value.cells.find(
+    (c) => c.from_element_type_id === fromId && c.to_element_type_id === toId
+  );
+  return connectionTypes.value.map((ct) => {
+    const rule = cell?.rules?.find((r) => r.connection_type_id === ct.id);
+    return {
+      connection_type_id: ct.id,
+      allowed: rule ? Boolean(rule.allowed) : true,
+    };
+  });
+});
 const previewVisibleFields = computed(() =>
   elementFields.value
     .map((field, index) => ({ field, index }))
@@ -1192,6 +1297,17 @@ const applyBulkRules = async () => {
   } catch (e) { fail(e.message || 'Failed to apply bulk update'); }
 };
 
+const togglePairRule = async (connTypeId, currentAllowed) => {
+  const fromEl = elementTypes.value.find((e) => e.id === pairSelectorFrom.value);
+  const toEl = elementTypes.value.find((e) => e.id === pairSelectorTo.value);
+  if (!fromEl || !toEl) return;
+  const rule = {
+    connection_type_id: connTypeId,
+    allowed: currentAllowed,
+  };
+  await toggleCellRule(fromEl, toEl, rule);
+};
+
 watch(() => visible.value, async (isOpen) => {
   if (isOpen) {
     await reloadCatalog();
@@ -1200,6 +1316,8 @@ watch(() => visible.value, async (isOpen) => {
   finishPreviewFieldDrag();
   svgDropActive.value = false;
   clearToasts();
+  pairSelectorFrom.value = null;
+  pairSelectorTo.value = null;
 });
 watch(() => elementEditor.visible, (isOpen) => {
   if (!isOpen) {
@@ -1208,6 +1326,8 @@ watch(() => elementEditor.visible, (isOpen) => {
   }
 });
 watch(() => selectedDiagramTypeId.value, (id) => {
+  pairSelectorFrom.value = null;
+  pairSelectorTo.value = null;
   if (!isUuid(id)) return;
   if (typeof window !== 'undefined') {
     window.localStorage.setItem(SELECTED_TYPE_STORAGE_KEY, id);
@@ -1829,6 +1949,140 @@ html[data-theme='dark'] .p-dialog.rules-dialog .rt-toast {
   background: #111827;
   color: #e2e8f0;
   border-color: #334155;
+}
+
+.rules-view-selector-bar {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+}
+.pair-selector-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--rt-border);
+  border-radius: 12px;
+  background: var(--rt-surface);
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+.pair-selectors {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+}
+.pair-selectors .selector-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+.pair-selectors .selector-field label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--rt-muted);
+}
+.pair-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  color: var(--rt-muted);
+  font-size: 1.3rem;
+  padding-bottom: 0.25rem;
+}
+.pair-rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+.pair-rules-header {
+  border-bottom: 1px solid var(--rt-border);
+  padding-bottom: 0.6rem;
+}
+.pair-rules-header h5 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.pair-rules-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1rem;
+}
+.pair-rule-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.15rem;
+  border: 1px solid var(--rt-border);
+  border-radius: 10px;
+  background: var(--rt-surface-soft);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.pair-rule-item.allowed {
+  border-color: var(--rt-success-border);
+  background: var(--rt-success-bg);
+}
+.pair-rule-item.blocked {
+  border-color: var(--rt-danger-border);
+  background: var(--rt-danger-bg);
+}
+.pair-rule-info {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+.pair-rule-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+.pair-selector-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 5rem 2rem;
+  text-align: center;
+  color: var(--rt-muted);
+  border: 2px dashed var(--rt-border);
+  border-radius: 12px;
+  background: rgba(148, 163, 184, 0.03);
+}
+.pair-selector-placeholder .placeholder-icon {
+  font-size: 3.5rem;
+  margin-bottom: 1.25rem;
+  opacity: 0.4;
+  color: var(--app-accent, #0f766e);
+}
+.pair-selector-placeholder p {
+  margin: 0;
+  font-size: 1.05rem;
+  max-width: 420px;
+  line-height: 1.5;
+}
+
+html[data-theme='dark'] .p-dialog.rules-dialog .pair-selector-container {
+  background: #111827 !important;
+  border-color: #2b3850 !important;
+}
+html[data-theme='dark'] .p-dialog.rules-dialog .pair-rule-item {
+  background: #0f172a !important;
+  border-color: #2b3850 !important;
+}
+html[data-theme='dark'] .p-dialog.rules-dialog .pair-rule-item.allowed {
+  border-color: var(--rt-success-border) !important;
+  background: var(--rt-success-bg) !important;
+}
+html[data-theme='dark'] .p-dialog.rules-dialog .pair-rule-item.blocked {
+  border-color: var(--rt-danger-border) !important;
+  background: var(--rt-danger-bg) !important;
+}
+html[data-theme='dark'] .p-dialog.rules-dialog .pair-selector-placeholder {
+  background: rgba(15, 23, 42, 0.2) !important;
+  border-color: #2b3850 !important;
 }
 
 @media (max-width: 1400px) {

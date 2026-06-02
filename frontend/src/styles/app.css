@@ -592,6 +592,8 @@
 .element-field-label.element-field-list {
   min-width: 110px;
   max-width: min(220px, calc(100% - 12px));
+  transform: translate(-50%, 0);
+  transform-origin: top center;
   white-space: normal;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -643,6 +645,11 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  max-height: 8em;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding-right: 2px;
 }
 
 .element-list-item,
@@ -969,7 +976,14 @@ button.has-changes {
 }
 
 .class-section.class-list {
-    min-height: 24px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 auto;
+}
+
+.class-section.class-list:has(.class-list-items) {
+    flex: 1 1 0;
 }
 
 .class-list-toggle {
@@ -979,13 +993,26 @@ button.has-changes {
 }
 
 .class-line {
+    display: block;
     font-family: monospace;
     font-size: 0.85em;
+    line-height: 1.3;
+    min-height: 1.3em;
     padding: 2px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     max-width: 100%;
+}
+
+.class-section.class-list .class-list-items {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+    padding-right: 2px;
 }
 
 .class-placeholder {

@@ -138,6 +138,34 @@ getElementPreset(type) {
       return this.normalizeElementListValue(props[key] ?? fallback);
     },
 
+    getClassListItemsStyle(element) {
+      const elementHeight = Math.max(60, Number(element?.height) || 60);
+      // Split remaining space for Attributes/Methods lists and keep room for headers/dividers/title.
+      const perList = Math.max(28, Math.floor((elementHeight - 90) / 2));
+      return {
+        maxHeight: `${Math.min(220, perList)}px`,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        paddingRight: '2px',
+        scrollbarGutter: 'stable',
+      };
+    },
+
+    getFieldListItemsStyle(element, field) {
+      const clamp = (v, fallback) => Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : fallback));
+      const elementHeight = Math.max(40, Number(element?.height) || 40);
+      const y = clamp(field?.y, 0.5);
+      // Allow the list to expand downwards only within available area below the anchor.
+      const availableBelow = Math.max(24, Math.floor((1 - y) * elementHeight - 18));
+      return {
+        maxHeight: `${Math.min(220, availableBelow)}px`,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        paddingRight: '2px',
+        scrollbarGutter: 'stable',
+      };
+    },
+
     getElementListStateKey(element, fieldOrKey, idx = 0) {
       const key = typeof fieldOrKey === 'string' ? fieldOrKey : this.getElementFieldKey(fieldOrKey, idx);
       return `${element?.id || 'element'}:${key}`;
@@ -199,11 +227,14 @@ getElementPreset(type) {
       const clamp = (v, fallback) => Math.max(0, Math.min(1, Number.isFinite(Number(v)) ? Number(v) : fallback));
       const x = clamp(field?.x, 0.5);
       const y = clamp(field?.y, 0.5);
+      const isListField = this.resolveElementFieldType(field) === 'list';
       const color = this.getElementFieldTextColor(element, field, idx);
       const style = {
         left: `${(x * 100).toFixed(1)}%`,
         top: `${(y * 100).toFixed(1)}%`,
         fontSize: `${this.getElementInnerTextSize(element)}px`,
+        transform: isListField ? 'translate(-50%, 0)' : 'translate(-50%, -50%)',
+        transformOrigin: isListField ? 'top center' : 'center center',
       };
       if (color) {
         style.color = color;
@@ -339,6 +370,12 @@ getElementStyle(element) {
         style.boxShadow = `inset 0 0 0 4px ${borderColor}`;
       } else {
         style.borderRadius = '10px';
+      }
+
+      if (element.type === 'class') {
+        // Keep class content anchored to top so expandable lists grow downward only.
+        style.justifyContent = 'flex-start';
+        style.alignItems = 'stretch';
       }
 
       if (this.dragElement?.id === element.id) {

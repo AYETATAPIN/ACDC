@@ -130,6 +130,7 @@
                     v-for="item in previewVisibleFields"
                     :key="`quick-preview-field-${item.index}`"
                     class="preview-field preview-field-placed"
+                    :class="{ 'preview-field-list': normalizeFieldType(item.field?.type) === 'list' }"
                     :style="previewFieldStyle(item.field, item.order)"
                   >
                     {{ previewFieldLabel(item.field, item.order) }}
@@ -382,7 +383,10 @@
                   v-for="item in previewVisibleFields"
                   :key="`dialog-preview-field-${item.index}`"
                   class="preview-field preview-field-placed draggable"
-                  :class="{ dragging: previewDrag.active && previewDrag.fieldIndex === item.index }"
+                  :class="{
+                    'preview-field-list': normalizeFieldType(item.field?.type) === 'list',
+                    dragging: previewDrag.active && previewDrag.fieldIndex === item.index
+                  }"
                   :style="previewFieldStyle(item.field, item.order)"
                   @pointerdown.stop.prevent="beginPreviewFieldDrag(item.index, $event)"
                 >
@@ -657,10 +661,13 @@ const previewFieldStyle = (field, idx) => {
   const fallbackY = Math.min(0.9, 0.22 + idx * 0.16);
   const x = clamp01(field?.x ?? 0.5);
   const y = clamp01(field?.y ?? fallbackY);
+  const isList = normalizeFieldType(field?.type) === 'list';
   return {
     left: `${(x * 100).toFixed(1)}%`,
     top: `${(y * 100).toFixed(1)}%`,
     color: normalizeHexColor(field?.textColor, '#ffffff'),
+    transform: isList ? 'translate(-50%, 0)' : 'translate(-50%, -50%)',
+    transformOrigin: isList ? 'top center' : 'center center',
   };
 };
 const previewFieldLabel = (field, idx) => {
@@ -1785,6 +1792,10 @@ onBeforeUnmount(() => {
   padding: 2px 6px;
   white-space: nowrap;
   border-top: none;
+}
+.preview-field-placed.preview-field-list {
+  transform: translate(-50%, 0);
+  transform-origin: top center;
 }
 .preview-field-placed.draggable {
   cursor: grab;

@@ -492,7 +492,7 @@
                         <span class="element-list-title">{{ getElementFieldLabel(field, idx) }}</span>
                         <span class="element-list-count">({{ getElementListItems(element, field, idx).length }})</span>
                       </div>
-                      <div v-if="isElementListExpanded(element, getElementFieldKey(field, idx))" class="element-list-items">
+                      <div v-if="isElementListExpanded(element, getElementFieldKey(field, idx))" class="element-list-items" :style="getFieldListItemsStyle(element, field)">
                         <div
                           v-for="(item, itemIdx) in getElementListItems(element, field, idx)"
                           :key="`field-${element.id}-${idx}-item-${itemIdx}`"
@@ -599,7 +599,7 @@
                         <span class="element-list-title">{{ getElementFieldLabel(field, idx) }}</span>
                         <span class="element-list-count">({{ getElementListItems(element, field, idx).length }})</span>
                       </div>
-                      <div v-if="isElementListExpanded(element, getElementFieldKey(field, idx))" class="element-list-items">
+                      <div v-if="isElementListExpanded(element, getElementFieldKey(field, idx))" class="element-list-items" :style="getFieldListItemsStyle(element, field)">
                         <div
                           v-for="(item, itemIdx) in getElementListItems(element, field, idx)"
                           :key="`field-${element.id}-${idx}-item-${itemIdx}`"

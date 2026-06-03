@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 
-import { clearShareContext, getShareContext, setShareContext, sharesService } from '../frontend/src/services/sharesService.js';
+import { clearShareContext, getShareContext, ruleSharesService, setShareContext, sharesService } from '../frontend/src/services/sharesService.js';
 
 const originalFetch = globalThis.fetch;
 const calls: Array<{ url: string; init?: RequestInit }> = [];
@@ -47,4 +47,23 @@ test('share context stores active token and access metadata', () => {
   assert.equal(getShareContext().token, 'token-1');
   assert.equal(getShareContext().access?.canWrite, true);
   assert.equal(getShareContext().diagramTypeBundle?.diagram_type?.id, 'type-1');
+});
+
+test('ruleSharesService calls rule share owner and public endpoints', async () => {
+  await ruleSharesService.listOwnerShares('type-1');
+  await ruleSharesService.createOwnerShare('type-1');
+  await ruleSharesService.rotateOwnerShare('type-1');
+  await ruleSharesService.getState('token-1');
+  await ruleSharesService.accept('token-1');
+
+  assert.deepEqual(
+    calls.map((call) => [call.url, call.init?.method || 'GET']),
+    [
+      ['/api/v1/diagram-types/type-1/shares', 'GET'],
+      ['/api/v1/diagram-types/type-1/shares/read', 'POST'],
+      ['/api/v1/diagram-types/type-1/shares/read/rotate', 'POST'],
+      ['/api/v1/rule-shares/token-1/state', 'GET'],
+      ['/api/v1/rule-shares/token-1/accept', 'POST'],
+    ],
+  );
 });

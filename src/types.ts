@@ -35,7 +35,7 @@ export interface AccessPolicy {
   canRead: boolean;
   canWrite: boolean;
   canShare: boolean;
-  mode?: 'owner' | 'shared';
+  mode?: 'owner' | 'shared' | 'rule_share';
   permission?: 'owner' | 'read' | 'edit';
   canDelete?: boolean;
   canReplaceImport?: boolean;
@@ -205,6 +205,26 @@ export interface ShareToken {
   revoked_at?: string | null;
   expires_at?: string | null;
   created_by_user_id?: string | null;
+  created_at: string;
+}
+
+export interface DiagramTypeShareToken {
+  id: string;
+  diagram_type_id: string;
+  permission: 'read';
+  mode: 'live';
+  token_hash: string;
+  revoked_at?: string | null;
+  expires_at?: string | null;
+  created_by_user_id?: string | null;
+  created_at: string;
+}
+
+export interface DiagramTypeShareGrant {
+  id: string;
+  diagram_type_id: string;
+  user_id: string;
+  created_from_token_id?: string | null;
   created_at: string;
 }
 

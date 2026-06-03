@@ -183,3 +183,17 @@ export const sharesService = {
     return result;
   },
 };
+
+export const ruleSharesService = {
+  listOwnerShares: async (diagramTypeId) => apiRequest(`/diagram-types/${encodeURIComponent(diagramTypeId)}/shares`),
+
+  createOwnerShare: async (diagramTypeId) =>
+    apiRequest(`/diagram-types/${encodeURIComponent(diagramTypeId)}/shares/read`, { method: 'POST' }),
+
+  rotateOwnerShare: async (diagramTypeId) =>
+    apiRequest(`/diagram-types/${encodeURIComponent(diagramTypeId)}/shares/read/rotate`, { method: 'POST' }),
+
+  getState: async (token) => apiRequest(`/rule-shares/${encodeURIComponent(token)}/state`),
+
+  accept: async (token) => apiRequest(`/rule-shares/${encodeURIComponent(token)}/accept`, { method: 'POST' }),
+};

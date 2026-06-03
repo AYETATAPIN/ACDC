@@ -10,6 +10,7 @@ import DiagramPropertiesPanel from './components/DiagramPropertiesPanel.vue';
 import DiagramHistoryPanel from './components/DiagramHistoryPanel.vue';
 import DiagramRulesTypesDialog from './components/DiagramRulesTypesDialog.vue';
 import ShareDialog from './components/ShareDialog.vue';
+import RuleShareView from './components/RuleShareView.vue';
 import { appMethods } from './app-methods.js';
 
 const ownerAccessPolicy = () => ({
@@ -33,6 +34,7 @@ export default {
     DiagramHistoryPanel,
     DiagramRulesTypesDialog,
     ShareDialog,
+    RuleShareView,
     Dialog,
     InputText,
     Button
@@ -47,6 +49,12 @@ export default {
       authUser: null,
       authError: null,
       shareToken: null,
+      ruleShareToken: null,
+      ruleShareState: null,
+      ruleShareLoadError: null,
+      ruleShareNotice: null,
+      ruleShareAccepting: false,
+      ruleShareLoginRequired: false,
       shareLoginRequired: false,
       shareLoadError: null,
       shareDialogVisible: false,
@@ -199,6 +207,7 @@ export default {
     window.addEventListener('keydown', this.handleKeyDown);
     this.initTheme();
     this.pushLocalHistorySnapshot();
+    this.ruleShareToken = this.extractRuleShareTokenFromPath();
     this.shareToken = this.extractShareTokenFromPath();
     await this.initializeAuth();
   },
@@ -232,16 +241,21 @@ export default {
 
     requiresAuthGate() {
       if (this.authUser) return false;
+      if (this.ruleShareToken) return this.ruleShareLoginRequired;
       if (this.shareToken) return this.shareLoginRequired;
       return true;
     },
 
     authGateTitle() {
+      if (this.ruleShareLoginRequired) return 'Войдите, чтобы добавить правила';
       if (this.shareLoginRequired) return 'Войдите, чтобы редактировать диаграмму';
       return '';
     },
 
     authGateLead() {
+      if (this.ruleShareLoginRequired) {
+        return 'После входа или регистрации ACDC снова откроет ссылку правил, и вы сможете добавить тип в свой список.';
+      }
       if (this.shareLoginRequired) {
         return 'Эта ссылка дает доступ на редактирование. После входа или регистрации ACDC снова откроет эту же ссылку.';
       }

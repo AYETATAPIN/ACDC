@@ -49,7 +49,7 @@ export class DiagramService {
       if (!typeEntity) {
         throw new HttpError(400, 'Diagram type not found');
       }
-      if (!typeEntity.is_builtin && typeEntity.owner_user_id !== ownerUserId) {
+      if (!typeEntity.is_builtin && typeEntity.owner_user_id !== ownerUserId && !(await this.diagramTypeRepo.isAccessibleToUser(input.diagram_type_id, ownerUserId))) {
         throw new HttpError(403, 'No access to this diagram type');
       }
       const derivedType = isLegacyType(typeEntity?.key) ? (typeEntity?.key as DiagramKind) : input.type ?? 'class';

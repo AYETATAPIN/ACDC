@@ -25,6 +25,25 @@
       </div>
     </div>
 
+    <div v-else-if="ruleShareLoadError" class="share-error-screen">
+      <div class="share-error-card">
+        <p class="share-error-eyebrow">ACDC</p>
+        <h1>Ссылка правил недействительна</h1>
+        <p>{{ ruleShareLoadError }}</p>
+      </div>
+    </div>
+
+    <RuleShareView
+      v-else-if="ruleShareToken"
+      :state="ruleShareState"
+      :auth-user="authUser"
+      :accepting="ruleShareAccepting"
+      :notice="ruleShareNotice"
+      :error="errorMessage"
+      @accept="acceptRuleShare"
+      @auth="showRuleShareAuthGate"
+    />
+
     <template v-else>
     <DiagramHeader
       :diagram-name="diagramName"
@@ -74,6 +93,7 @@
       :connections="connections"
       :elements="elements"
       :access-policy="accessPolicy"
+      :auth-user="authUser"
       @apply-diagram-type="handleApplyDiagramType"
     />
 

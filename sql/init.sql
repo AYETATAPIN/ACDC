@@ -174,3 +174,29 @@ CREATE TABLE IF NOT EXISTS share_tokens (
 
 CREATE INDEX IF NOT EXISTS idx_share_tokens_diagram_id ON share_tokens (diagram_id);
 CREATE INDEX IF NOT EXISTS idx_share_tokens_diagram_permission ON share_tokens (diagram_id, permission);
+
+CREATE TABLE IF NOT EXISTS diagram_type_share_tokens (
+  id UUID PRIMARY KEY,
+  diagram_type_id UUID NOT NULL REFERENCES diagram_types(id) ON DELETE CASCADE,
+  permission TEXT NOT NULL DEFAULT 'read' CHECK (permission IN ('read')),
+  mode TEXT NOT NULL DEFAULT 'live' CHECK (mode IN ('live')),
+  token_hash TEXT NOT NULL UNIQUE,
+  revoked_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ,
+  created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS diagram_type_share_grants (
+  id UUID PRIMARY KEY,
+  diagram_type_id UUID NOT NULL REFERENCES diagram_types(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_from_token_id UUID REFERENCES diagram_type_share_tokens(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(diagram_type_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_diagram_type_share_tokens_type ON diagram_type_share_tokens (diagram_type_id);
+CREATE INDEX IF NOT EXISTS idx_diagram_type_share_tokens_type_permission ON diagram_type_share_tokens (diagram_type_id, permission);
+CREATE INDEX IF NOT EXISTS idx_diagram_type_share_grants_user ON diagram_type_share_grants (user_id);
+CREATE INDEX IF NOT EXISTS idx_diagram_type_share_grants_type ON diagram_type_share_grants (diagram_type_id);

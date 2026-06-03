@@ -13,7 +13,7 @@ const ownerAccessPolicy = () => ({
 
 export const authMethods = {
   resetWorkspaceForSignedOutUser() {
-    if (!this.shareToken) {
+    if (!this.shareToken && !this.ruleShareToken) {
       this.accessPolicy = ownerAccessPolicy();
       clearShareContext();
     }
@@ -52,7 +52,9 @@ export const authMethods = {
       const response = await authService.me();
       this.authUser = response.user || null;
 
-      if (this.shareToken) {
+      if (this.ruleShareToken) {
+        await this.loadRuleShareState();
+      } else if (this.shareToken) {
         await this.loadSharedDiagramState();
       } else if (this.authUser) {
         this.accessPolicy = ownerAccessPolicy();
@@ -67,7 +69,9 @@ export const authMethods = {
       }
 
       this.authUser = null;
-      if (this.shareToken) {
+      if (this.ruleShareToken) {
+        await this.loadRuleShareState();
+      } else if (this.shareToken) {
         await this.loadSharedDiagramState();
       } else {
         this.resetWorkspaceForSignedOutUser();
@@ -114,7 +118,10 @@ export const authMethods = {
         display_name: this.authForm.display_name,
       };
 
-      if (this.shareToken) {
+      if (this.ruleShareToken) {
+        await this.loadRuleShareState();
+        this.ruleShareLoginRequired = false;
+      } else if (this.shareToken) {
         await this.loadSharedDiagramState();
       } else {
         this.accessPolicy = ownerAccessPolicy();
@@ -143,7 +150,9 @@ export const authMethods = {
         display_name: '',
       };
       this.resetWorkspaceForSignedOutUser();
-      if (this.shareToken) {
+      if (this.ruleShareToken) {
+        await this.loadRuleShareState();
+      } else if (this.shareToken) {
         await this.loadSharedDiagramState();
       }
     }

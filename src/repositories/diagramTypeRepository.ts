@@ -101,10 +101,11 @@ export class DiagramTypeRepository {
 
   async listAccessibleToUser(userId: string): Promise<DiagramTypeEntity[]> {
     const res = await this.pool.query(
-      `SELECT *
-       FROM diagram_types
-       WHERE is_builtin = TRUE OR owner_user_id = $1
-       ORDER BY is_builtin DESC, created_at ASC`,
+      `SELECT DISTINCT dt.*
+       FROM diagram_types dt
+       LEFT JOIN diagram_type_share_grants g ON g.diagram_type_id = dt.id AND g.user_id = $1
+       WHERE dt.is_builtin = TRUE OR dt.owner_user_id = $1 OR g.id IS NOT NULL
+       ORDER BY dt.is_builtin DESC, dt.created_at ASC`,
       [userId],
     );
     return res.rows.map(mapDiagramTypeRow);
@@ -118,11 +119,28 @@ export class DiagramTypeRepository {
 
   async getAccessibleById(id: string, userId: string): Promise<DiagramTypeEntity | null> {
     const res = await this.pool.query(
-      'SELECT * FROM diagram_types WHERE id = $1 AND (is_builtin = TRUE OR owner_user_id = $2)',
+      `SELECT dt.*
+       FROM diagram_types dt
+       LEFT JOIN diagram_type_share_grants g ON g.diagram_type_id = dt.id AND g.user_id = $2
+       WHERE dt.id = $1
+         AND (dt.is_builtin = TRUE OR dt.owner_user_id = $2 OR g.id IS NOT NULL)`,
       [id, userId],
     );
     if (res.rows.length === 0) return null;
     return mapDiagramTypeRow(res.rows[0]);
+  }
+
+  async isAccessibleToUser(id: string, userId: string): Promise<boolean> {
+    const res = await this.pool.query(
+      `SELECT 1
+       FROM diagram_types dt
+       LEFT JOIN diagram_type_share_grants g ON g.diagram_type_id = dt.id AND g.user_id = $2
+       WHERE dt.id = $1
+         AND (dt.is_builtin = TRUE OR dt.owner_user_id = $2 OR g.id IS NOT NULL)
+       LIMIT 1`,
+      [id, userId],
+    );
+    return res.rows.length > 0;
   }
 
   async create(input: DiagramTypeCreateInput): Promise<DiagramTypeEntity> {

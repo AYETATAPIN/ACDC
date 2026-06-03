@@ -9,6 +9,7 @@ export {
   clearShareContext,
   getShareContext,
   isSharedContext,
+  ruleSharesService,
   setShareContext,
   sharesService,
 } from './sharesService.js';

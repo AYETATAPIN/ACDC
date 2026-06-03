@@ -358,7 +358,120 @@ test('edit share bulk save rejects element and connection types outside the shar
   assert.equal(state.connections.length, 0);
 });
 
+test('diagram type rule share can be viewed anonymously and accepted by authenticated users', async (t) => {
+  if (!dbReady) {
+    t.skip('Database is not available in this environment');
+    return;
+  }
+
+  const owner = await register('rule-share-owner@example.test');
+  const collaborator = await register('rule-share-collab@example.test');
+  const catalog = await createCustomCatalog(owner.cookie, 'Shared Rules');
+
+  const initial = await getJson(`/api/v1/diagram-types/${catalog.type.id}/shares`, owner.cookie);
+  assert.deepEqual(
+    initial.items.map((item: any) => ({ permission: item.permission, active: item.active, url: item.url })),
+    [{ permission: 'read', active: false, url: null }],
+  );
+
+  const created = await postJson(`/api/v1/diagram-types/${catalog.type.id}/shares/read`, undefined, owner.cookie, 201);
+  assert.equal(created.permission, 'read');
+  assert.equal(created.active, true);
+  assert.ok(created.token);
+  assert.match(created.url, new RegExp(`^${baseUrl}/rules/share/`));
+
+  const anonymousState = await getJson(`/api/v1/rule-shares/${created.token}/state`);
+  assert.equal(anonymousState.diagram_type.id, catalog.type.id);
+  assert.equal(anonymousState.element_types.length, 2);
+  assert.equal(anonymousState.connection_types.length, 1);
+  assert.equal(anonymousState.rules_matrix.elements.length, 2);
+  assert.equal(anonymousState.access.canWrite, false);
+
+  const accepted = await postJson(`/api/v1/rule-shares/${created.token}/accept`, undefined, collaborator.cookie, 200);
+  assert.equal(accepted.diagram_type.id, catalog.type.id);
+
+  const collaboratorTypes = await getJson('/api/v1/diagram-types', collaborator.cookie);
+  assert.ok(collaboratorTypes.items.some((item: any) => item.id === catalog.type.id));
+
+  await putJson(`/api/v1/diagram-types/${catalog.type.id}`, { name: 'Forbidden edit' }, collaborator.cookie, 403);
+
+  const diagramId = await createDiagram(collaborator.cookie, 'Uses shared rules', catalog.type.id);
+  const status = await getJson(`/api/v1/diagrams/${diagramId}/type-version-status`, collaborator.cookie);
+  assert.equal(status.diagram_type_id, catalog.type.id);
+  assert.equal(status.has_update, false);
+});
+
+test('rotating a rule share blocks new accepts but keeps existing grants usable', async (t) => {
+  if (!dbReady) {
+    t.skip('Database is not available in this environment');
+    return;
+  }
+
+  const owner = await register('rule-share-rotate-owner@example.test');
+  const collaborator = await register('rule-share-rotate-collab@example.test');
+  const lateUser = await register('rule-share-rotate-late@example.test');
+  const catalog = await createCustomCatalog(owner.cookie, 'Rotated Rules');
+  const first = await postJson(`/api/v1/diagram-types/${catalog.type.id}/shares/read`, undefined, owner.cookie, 201);
+
+  await postJson(`/api/v1/rule-shares/${first.token}/accept`, undefined, collaborator.cookie, 200);
+
+  const rotated = await postJson(`/api/v1/diagram-types/${catalog.type.id}/shares/read/rotate`, undefined, owner.cookie, 201);
+  assert.notEqual(rotated.token, first.token);
+
+  await getJson(`/api/v1/rule-shares/${first.token}/state`, undefined, 404);
+  await postJson(`/api/v1/rule-shares/${first.token}/accept`, undefined, lateUser.cookie, 404);
+
+  const collaboratorTypes = await getJson('/api/v1/diagram-types', collaborator.cookie);
+  assert.ok(collaboratorTypes.items.some((item: any) => item.id === catalog.type.id));
+  await createDiagram(collaborator.cookie, 'Still uses granted rules', catalog.type.id);
+});
+
+test('accepted rule share uses existing diagram type version upgrade flow', async (t) => {
+  if (!dbReady) {
+    t.skip('Database is not available in this environment');
+    return;
+  }
+
+  const owner = await register('rule-share-version-owner@example.test');
+  const collaborator = await register('rule-share-version-collab@example.test');
+  const catalog = await createCustomCatalog(owner.cookie, 'Versioned Shared Rules', { isFreeMode: false });
+  const share = await postJson(`/api/v1/diagram-types/${catalog.type.id}/shares/read`, undefined, owner.cookie, 201);
+
+  await postJson(`/api/v1/rule-shares/${share.token}/accept`, undefined, collaborator.cookie, 200);
+  const diagramId = await createDiagram(collaborator.cookie, 'Versioned shared diagram', catalog.type.id);
+  await putJson(`/api/v1/diagrams/${diagramId}`, buildBulkSave(catalog), collaborator.cookie, 200);
+
+  const initialStatus = await getJson(`/api/v1/diagrams/${diagramId}/type-version-status`, collaborator.cookie);
+  assert.equal(initialStatus.has_update, false);
+
+  await putJson(
+    `/api/v1/diagram-types/${catalog.type.id}/rules/cell`,
+    {
+      from_element_type_id: catalog.elements[0].id,
+      to_element_type_id: catalog.elements[1].id,
+      rules: [{ connection_type_id: catalog.connectionType.id, allowed: false }],
+    },
+    owner.cookie,
+    200,
+  );
+
+  const staleStatus = await getJson(`/api/v1/diagrams/${diagramId}/type-version-status`, collaborator.cookie);
+  assert.equal(staleStatus.has_update, true);
+
+  const failedUpgrade = await postJson(`/api/v1/diagrams/${diagramId}/type-version-update`, undefined, collaborator.cookie, 409);
+  assert.equal(failedUpgrade.issues[0].kind, 'connection_rule_violation');
+
+  const fixedPayload = buildBulkSave(catalog);
+  fixedPayload.connections = [];
+  await putJson(`/api/v1/diagrams/${diagramId}`, fixedPayload, collaborator.cookie, 200);
+
+  const successfulUpgrade = await postJson(`/api/v1/diagrams/${diagramId}/type-version-update`, undefined, collaborator.cookie, 200);
+  assert.equal(successfulUpgrade.success, true);
+});
+
 async function resetDb(p: Pool) {
+  await p.query('DELETE FROM diagram_type_share_grants');
+  await p.query('DELETE FROM diagram_type_share_tokens');
   await p.query('DELETE FROM share_tokens');
   await p.query('DELETE FROM diagram_history');
   await p.query('DELETE FROM diagram_connections');
@@ -395,11 +508,11 @@ async function createShare(cookie: string, diagramId: string, permission: 'read'
   return postJson(`/api/v1/diagrams/${diagramId}/shares/${permission}`, undefined, cookie, 201);
 }
 
-async function createCustomCatalog(cookie: string, name: string) {
+async function createCustomCatalog(cookie: string, name: string, options: { isFreeMode?: boolean } = {}) {
   const suffix = name.toLowerCase().replace(/\s+/g, '_');
   const type = await postJson(
     '/api/v1/diagram-types',
-    { key: `type_${suffix}`, name, is_free_mode: true, metadata: { test: true } },
+    { key: `type_${suffix}`, name, is_free_mode: options.isFreeMode ?? true, metadata: { test: true } },
     cookie,
     201,
   );

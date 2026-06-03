@@ -1,5 +1,5 @@
 import { findBestSegmentIndex, toggleBendPointPoints } from '../utils/bendPoints.js';
-import { diagramsService, diagramTypesService, ApiError, clearShareContext, setShareContext, sharesService } from '../services/index.js';
+import { diagramsService, diagramTypesService, ApiError, clearShareContext, setShareContext, sharesService, ruleSharesService } from '../services/index.js';
 import { isConnectionAllowedByMatrix, normalizeRulesMatrix } from '../rules/connectionRules.js';
 import { BUILTIN_DIAGRAM_TYPE_IDS } from '../app-constants.js';
 
@@ -12,6 +12,58 @@ extractShareTokenFromPath() {
       if (typeof window === 'undefined') return null;
       const match = window.location.pathname.match(/^\/share\/([^/?#]+)/);
       return match ? decodeURIComponent(match[1]) : null;
+    },
+
+extractRuleShareTokenFromPath() {
+      if (typeof window === 'undefined') return null;
+      const match = window.location.pathname.match(/^\/rules\/share\/([^/?#]+)/);
+      return match ? decodeURIComponent(match[1]) : null;
+    },
+
+showRuleShareAuthGate() {
+      this.ruleShareLoginRequired = true;
+      this.authError = null;
+      this.authMode = 'login';
+    },
+
+async loadRuleShareState() {
+      if (!this.ruleShareToken) return;
+      this.isLoading = true;
+      this.errorMessage = null;
+      this.ruleShareLoadError = null;
+      try {
+        this.ruleShareState = await ruleSharesService.getState(this.ruleShareToken);
+        this.ruleShareLoginRequired = false;
+      } catch (error) {
+        this.ruleShareLoadError = error.message || 'Ссылка правил недействительна или была отозвана.';
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+async acceptRuleShare() {
+      if (!this.ruleShareToken) return;
+      if (!this.authUser) {
+        this.showRuleShareAuthGate();
+        return;
+      }
+      this.ruleShareAccepting = true;
+      this.errorMessage = null;
+      this.ruleShareNotice = null;
+      try {
+        const data = await ruleSharesService.accept(this.ruleShareToken);
+        this.ruleShareState = data;
+        await this.loadDiagramTypesCatalog();
+        this.ruleShareNotice = 'Правила добавлены в ваши типы диаграмм.';
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          this.showRuleShareAuthGate();
+          return;
+        }
+        this.errorMessage = error.message || 'Не удалось добавить правила';
+      } finally {
+        this.ruleShareAccepting = false;
+      }
     },
 
 openShareDialog() {

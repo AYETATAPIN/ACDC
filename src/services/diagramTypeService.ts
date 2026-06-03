@@ -32,21 +32,23 @@ export class DiagramTypeService {
     return `${prefix}_${uuidv4()}`;
   }
 
-  private ensureReadable(type: DiagramTypeEntity | null, userId: string): DiagramTypeEntity | null {
+  private async ensureReadable(type: DiagramTypeEntity | null, userId: string): Promise<DiagramTypeEntity | null> {
     if (!type) return null;
-    if (!type.is_builtin && type.owner_user_id !== userId) {
+    if (!type.is_builtin && type.owner_user_id !== userId && !(await this.repo.isAccessibleToUser(type.id, userId))) {
       throw new HttpError(403, 'No access to this diagram type');
     }
     return type;
   }
 
   private ensureMutable(type: DiagramTypeEntity | null, userId: string): DiagramTypeEntity | null {
-    const readable = this.ensureReadable(type, userId);
-    if (!readable) return null;
-    if (readable.is_builtin) {
+    if (!type) return null;
+    if (!type.is_builtin && type.owner_user_id !== userId) {
+      throw new HttpError(403, 'No access to this diagram type');
+    }
+    if (type.is_builtin) {
       throw new HttpError(403, 'Built-in diagram types cannot be modified');
     }
-    return readable;
+    return type;
   }
 
   async list(userId: string): Promise<DiagramTypeEntity[]> {
@@ -86,8 +88,11 @@ export class DiagramTypeService {
   }
 
   async clone(userId: string, id: string, name: string): Promise<DiagramTypeEntity | null> {
-    const existing = this.ensureReadable(await this.repo.getById(id), userId);
+    const existing = await this.ensureReadable(await this.repo.getById(id), userId);
     if (!existing) return null;
+    if (!existing.is_builtin && existing.owner_user_id !== userId) {
+      throw new HttpError(403, 'Shared diagram types cannot be cloned');
+    }
     const cloned = await this.repo.clone(id, name, userId);
     if (cloned) {
       await this.repo.createVersionFromCurrentState(cloned.id);
@@ -97,7 +102,7 @@ export class DiagramTypeService {
   }
 
   async listElements(userId: string, diagramTypeId: string): Promise<ElementTypeEntity[]> {
-    const type = this.ensureReadable(await this.repo.getById(diagramTypeId), userId);
+    const type = await this.ensureReadable(await this.repo.getById(diagramTypeId), userId);
     if (!type) throw new HttpError(404, 'Diagram type not found');
     return this.repo.listElements(diagramTypeId);
   }
@@ -139,7 +144,7 @@ export class DiagramTypeService {
   }
 
   async listConnectionTypes(userId: string, diagramTypeId: string): Promise<ConnectionTypeEntity[]> {
-    const type = this.ensureReadable(await this.repo.getById(diagramTypeId), userId);
+    const type = await this.ensureReadable(await this.repo.getById(diagramTypeId), userId);
     if (!type) throw new HttpError(404, 'Diagram type not found');
     return this.repo.listConnectionTypes(diagramTypeId);
   }
@@ -181,7 +186,7 @@ export class DiagramTypeService {
   }
 
   async getRulesMatrix(userId: string, diagramTypeId: string): Promise<ConnectionRulesMatrix> {
-    const type = this.ensureReadable(await this.repo.getById(diagramTypeId), userId);
+    const type = await this.ensureReadable(await this.repo.getById(diagramTypeId), userId);
     if (!type) throw new HttpError(404, 'Diagram type not found');
     return this.repo.getRulesMatrix(diagramTypeId);
   }

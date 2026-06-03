@@ -2,12 +2,17 @@
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import { validateUUIDParam } from '../middleware/validateUUID.js';
 import { DiagramTypeController } from '../controllers/diagramTypeController.js';
+import { DiagramTypeShareController } from '../controllers/diagramTypeShareController.js';
 
-export const createDiagramTypeRouter = (controller: DiagramTypeController) => {
+export const createDiagramTypeRouter = (controller: DiagramTypeController, shareController: DiagramTypeShareController) => {
   const router = Router();
 
   router.get('/', asyncHandler(controller.list));
   router.post('/', asyncHandler(controller.create));
+
+  router.get('/:id/shares', validateUUIDParam('id'), asyncHandler(shareController.listOwnerShares));
+  router.post('/:id/shares/:permission', validateUUIDParam('id'), asyncHandler(shareController.createOwnerShare));
+  router.post('/:id/shares/:permission/rotate', validateUUIDParam('id'), asyncHandler(shareController.rotateOwnerShare));
 
   router.get('/:id', validateUUIDParam('id'), asyncHandler(controller.get));
   router.put('/:id', validateUUIDParam('id'), asyncHandler(controller.update));

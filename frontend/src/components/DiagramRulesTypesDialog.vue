@@ -19,6 +19,14 @@
       />
       <div class="actions">
         <Button icon="pi pi-refresh" outlined label="Refresh" @click="reloadCatalog" />
+        <Button
+          icon="pi pi-share-alt"
+          outlined
+          severity="success"
+          label="Поделиться правилами"
+          :disabled="!canShareSelectedRules"
+          @click="ruleShareDialogVisible = true"
+        />
       </div>
     </div>
 
@@ -77,15 +85,15 @@
             <h4>Selected Type</h4>
             <div class="form">
               <label>Name</label>
-              <InputText v-model="typeEditForm.name" :disabled="selectedType.is_builtin" />
+              <InputText v-model="typeEditForm.name" :disabled="!canMutate" />
               <label>Description</label>
-              <InputText v-model="typeEditForm.description" :disabled="selectedType.is_builtin" />
+              <InputText v-model="typeEditForm.description" :disabled="!canMutate" />
               <label>Free Mode</label>
-              <InputSwitch v-model="typeEditForm.is_free_mode" :disabled="selectedType.is_builtin" />
+              <InputSwitch v-model="typeEditForm.is_free_mode" :disabled="!canMutate" />
             </div>
             <div class="actions">
               <Button label="Save" icon="pi pi-save" :disabled="!canMutate" @click="updateType" />
-              <Button v-if="!selectedType.is_builtin" label="Delete" icon="pi pi-trash" severity="danger" outlined :disabled="isSharedMode || !accessCanWrite" @click="deleteType" />
+              <Button v-if="!selectedType.is_builtin" label="Delete" icon="pi pi-trash" severity="danger" outlined :disabled="!canMutate" @click="deleteType" />
             </div>
           </template>
         </section>
@@ -487,6 +495,8 @@
       </template>
     </Dialog>
 
+    <RuleShareDialog v-model="ruleShareDialogVisible" :diagram-type-id="selectedDiagramTypeId" />
+
   </Dialog>
 </template>
 
@@ -507,6 +517,7 @@ import ColorPicker from 'primevue/colorpicker';
 import MultiSelect from 'primevue/multiselect';
 import SelectButton from 'primevue/selectbutton';
 import { diagramTypesService, rulesService } from '../services/index.js';
+import RuleShareDialog from './RuleShareDialog.vue';
 import { buildMatrixRows, matrixCellToPayload, normalizeRulesMatrix } from '../rules/connectionRules.js';
 import { extractCustomShapeFromSvgText, parseCustomShapeData } from '../utils/customShape.js';
 
@@ -524,6 +535,7 @@ const props = defineProps({
   connections: { type: Array, default: () => [] },
   elements: { type: Array, default: () => [] },
   accessPolicy: { type: Object, default: () => ({ canWrite: true, mode: 'owner' }) },
+  authUser: { type: Object, default: null },
 });
 const emit = defineEmits(['update:modelValue', 'apply-diagram-type']);
 
@@ -569,6 +581,7 @@ const connectionForm = reactive({ name: '', color: '#34495e', dash: '', arrow_st
 const elementEditor = reactive({ visible: false, mode: 'create' });
 const bulkForm = reactive({ mode: 'row', target_id: null, connection_type_ids: [], allowed: true });
 const pendingRuleKey = ref('');
+const ruleShareDialogVisible = ref(false);
 
 const rulesViewMode = ref('matrix');
 const pairSelectorFrom = ref(null);
@@ -584,7 +597,9 @@ const matrixElements = computed(() => matrix.value.elements || []);
 const matrixRows = computed(() => buildMatrixRows(matrix.value));
 const accessCanWrite = computed(() => props.accessPolicy?.canWrite !== false);
 const isSharedMode = computed(() => props.accessPolicy?.mode === 'shared');
-const canMutate = computed(() => Boolean(accessCanWrite.value && selectedType.value && !selectedType.value.is_builtin));
+const ownsSelectedType = computed(() => Boolean(selectedType.value && selectedType.value.owner_user_id === props.authUser?.id));
+const canMutate = computed(() => Boolean(accessCanWrite.value && selectedType.value && !selectedType.value.is_builtin && ownsSelectedType.value));
+const canShareSelectedRules = computed(() => Boolean(selectedType.value && !selectedType.value.is_builtin && ownsSelectedType.value && !isSharedMode.value));
 const bulkTargets = computed(() => bulkForm.mode === 'connection_type' ? connectionTypes.value.map((x) => ({ label: x.name, value: x.id })) : matrixElements.value.map((x) => ({ label: x.name, value: x.id })));
 const selectedPairRules = computed(() => {
   if (!pairSelectorFrom.value || !pairSelectorTo.value) return [];
@@ -2112,4 +2127,3 @@ html[data-theme='dark'] .p-dialog.rules-dialog .pair-selector-placeholder {
   .compact-grid.three { grid-template-columns: 1fr; }
 }
 </style>
-

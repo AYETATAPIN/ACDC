@@ -8,6 +8,7 @@ import { DiagramBlockRepository } from './repositories/diagramBlockRepository.js
 import { DiagramConnectionRepository } from './repositories/diagramConnectionRepository.js';
 import { DiagramTypeRepository } from './repositories/diagramTypeRepository.js';
 import { ShareTokenRepository } from './repositories/shareTokenRepository.js';
+import { DiagramTypeShareRepository } from './repositories/diagramTypeShareRepository.js';
 import { DiagramService } from './services/diagramService.js';
 import { DiagramBlockService } from './services/diagramBlockService.js';
 import { DiagramConnectionService } from './services/diagramConnectionService.js';
@@ -15,12 +16,14 @@ import { DiagramHistoryService } from './services/diagramHistoryService.js';
 import { DiagramImportService } from './services/diagramImportService.js';
 import { DiagramTypeService } from './services/diagramTypeService.js';
 import { ShareTokenService } from './services/shareTokenService.js';
+import { DiagramTypeShareService } from './services/diagramTypeShareService.js';
 import { DiagramController } from './controllers/diagramController.js';
 import { DiagramBlockController } from './controllers/diagramBlockController.js';
 import { DiagramConnectionController } from './controllers/diagramConnectionController.js';
 import { DiagramHistoryController } from './controllers/diagramHistoryController.js';
 import { DiagramTypeController } from './controllers/diagramTypeController.js';
 import { ShareController } from './controllers/shareController.js';
+import { DiagramTypeShareController } from './controllers/diagramTypeShareController.js';
 import { AuthController } from './controllers/authController.js';
 import { createDiagramRouter } from './routes/diagrams.js';
 import { createDiagramBlockRouter } from './routes/diagramBlocks.js';
@@ -28,6 +31,7 @@ import { createDiagramConnectionRouter } from './routes/diagramConnections.js';
 import { createDiagramHistoryRouter } from './routes/diagramHistory.js';
 import { createDiagramTypeRouter } from './routes/diagramTypes.js';
 import { createShareRouter } from './routes/shares.js';
+import { createRuleShareRouter } from './routes/ruleShares.js';
 import { createAuthRouter } from './routes/auth.js';
 import { errorHandler, notFound } from './middleware/errorHandler.js';
 import { attachAuthContext, requireAuth } from './middleware/auth.js';
@@ -60,6 +64,7 @@ export const buildApp = async () => {
   const connectionRepo = new DiagramConnectionRepository(pool);
   const diagramTypeRepo = new DiagramTypeRepository(pool);
   const shareTokenRepo = new ShareTokenRepository(pool);
+  const diagramTypeShareRepo = new DiagramTypeShareRepository(pool);
   const userRepo = new UserRepository(pool);
   const sessionRepo = new SessionRepository(pool);
 
@@ -71,6 +76,7 @@ export const buildApp = async () => {
   const blockService = new DiagramBlockService(blockRepo, diagramRepo, historyService, diagramTypeService);
   const connectionService = new DiagramConnectionService(connectionRepo, blockRepo, diagramRepo, diagramTypeService, historyService);
   const shareTokenService = new ShareTokenService(shareTokenRepo, diagramRepo, historyService, diagramTypeService);
+  const diagramTypeShareService = new DiagramTypeShareService(diagramTypeShareRepo, diagramTypeService);
 
   const authController = new AuthController(authService);
   const diagramController = new DiagramController(diagramService, diagramImportService);
@@ -78,6 +84,7 @@ export const buildApp = async () => {
   const connectionController = new DiagramConnectionController(connectionService);
   const historyController = new DiagramHistoryController(historyService);
   const diagramTypeController = new DiagramTypeController(diagramTypeService);
+  const diagramTypeShareController = new DiagramTypeShareController(diagramTypeShareService);
   const shareController = new ShareController(
     shareTokenService,
     diagramService,
@@ -90,12 +97,13 @@ export const buildApp = async () => {
   app.use(attachAuthContext(authService));
   app.use('/api/v1/auth', createAuthRouter(authController));
   app.use('/api/v1/shares', createShareRouter(shareController));
+  app.use('/api/v1/rule-shares', createRuleShareRouter(diagramTypeShareController));
   app.use('/api/v1', requireAuth);
   app.use('/api/v1/diagrams', createDiagramRouter(diagramController, shareController));
   app.use('/api/v1/diagrams', createDiagramHistoryRouter(historyController));
   app.use('/api/v1/diagram-blocks', createDiagramBlockRouter(blockController));
   app.use('/api/v1/diagram-connections', createDiagramConnectionRouter(connectionController));
-  app.use('/api/v1/diagram-types', createDiagramTypeRouter(diagramTypeController));
+  app.use('/api/v1/diagram-types', createDiagramTypeRouter(diagramTypeController, diagramTypeShareController));
 
   app.get('*', (_req, res) => {
     res.sendFile(path.join(__dirname, '../public/index.html'));
